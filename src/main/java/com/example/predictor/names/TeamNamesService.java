@@ -14,11 +14,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
-import java.util.TreeSet;
 
 /**
  * Русские названия команд. Источник присылает их латиницей, а в приложении удобнее читать
@@ -77,26 +78,20 @@ public class TeamNamesService {
         TeamNameMap dictionary = map(true);
 
         // список оригинальных названий берём из матчей: именно их и нужно переводить
-        TreeSet<String> inMatches = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
-        inMatches.addAll(matches.findHomeTeamNames(groupId));
-        inMatches.addAll(matches.findAwayTeamNames(groupId));
-        inMatches.remove(null);
+        List<String> originals = new ArrayList<>();
+        originals.addAll(matches.findHomeTeamNames(groupId));
+        originals.addAll(matches.findAwayTeamNames(groupId));
 
-        List<TeamNameItem> teams = new ArrayList<>();
+        List<TeamNameItem> teams = rows(originals, dictionary);
         int translated = 0;
         int missing = 0;
-        for (String original : inMatches) {
-            String russian = dictionary.russianOf(original);
-            if (russian == null) {
+        for (TeamNameItem t : teams) {
+            if (t.russian() == null) {
                 missing++;
             } else {
                 translated++;
             }
-            teams.add(new TeamNameItem(original, russian, true));
         }
-        // сначала те, у кого перевода нет: именно их и нужно заполнить
-        teams.sort(Comparator.comparing((TeamNameItem t) -> t.russian() != null)
-                .thenComparing(TeamNameItem::original, String.CASE_INSENSITIVE_ORDER));
 
         String note = missing == 0
                 ? "Все команды из матчей переведены. Названия можно поправить в любой момент."
@@ -104,6 +99,28 @@ public class TeamNamesService {
                   + "Перевод увидят все группы.";
         return new TeamNamesView(ms.isOwner(), ms.group().isUseRussianNames(), translated, missing,
                 teams, note);
+    }
+
+    /**
+     * Строки экрана словаря: по одной на команду, одинаковые названия в разном регистре
+     * считаются одной командой. Сначала те, у кого перевода нет: именно их и нужно заполнить.
+     * Пустые названия пропускаются, чтобы кривая запись в базе не ломала экран.
+     */
+    static List<TeamNameItem> rows(Collection<String> originals, TeamNameMap dictionary) {
+        Map<String, String> unique = new LinkedHashMap<>();
+        for (String original : originals) {
+            if (original == null || original.isBlank()) {
+                continue;
+            }
+            unique.putIfAbsent(TeamNameMap.key(original), original.trim());
+        }
+        List<TeamNameItem> teams = new ArrayList<>();
+        for (String original : unique.values()) {
+            teams.add(new TeamNameItem(original, dictionary.russianOf(original), true));
+        }
+        teams.sort(Comparator.comparing((TeamNameItem t) -> t.russian() != null)
+                .thenComparing(TeamNameItem::original, String.CASE_INSENSITIVE_ORDER));
+        return teams;
     }
 
     /** Добавляет или меняет русское название. Оригинал — как он приходит от источника. */

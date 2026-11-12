@@ -5,7 +5,9 @@ package com.example.predictor.auth;
  * recoveryCode заполняется только когда выдан новый код восстановления (регистрация, восстановление
  * доступа, запрос нового кода): показать его пользователю и предложить сохранить.
  * mustChangePassword: вход по временному паролю от владельца группы, нужно сразу задать свой.
+ * mustSetPin: в простом режиме PIN ещё не задан или сброшен владельцем группы, нужно придумать новый.
  */
 public record AuthResponse(String token, Long userId, String username,
-                           String recoveryCode, boolean mustChangePassword) {
+                           String recoveryCode, boolean mustChangePassword,
+                           boolean mustSetPin) {
 }

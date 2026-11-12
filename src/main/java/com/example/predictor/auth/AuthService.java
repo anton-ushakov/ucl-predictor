@@ -28,6 +28,9 @@ public class AuthService {
     static final int MAX_RECOVERY_FAILS = 5;
     static final Duration RECOVERY_BLOCK = Duration.ofMinutes(15);
 
+    /** На столько блокируется вход после череды неверных PIN-кодов. */
+    static final Duration PIN_BLOCK = Duration.ofMinutes(15);
+
     private final AppUserRepository users;
     private final AuthTokenRepository tokens;
     private final PasswordEncoder encoder;
@@ -58,26 +61,84 @@ public class AuthService {
     }
 
     @Transactional
-    public AuthResponse registerSimple(String username) {
+    public AuthResponse registerSimple(String username, String pin) {
         String name = normalizeUsername(username);
+        checkPin(pin);
         if (users.existsByUsernameIgnoreCase(name)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Это имя уже занято");
         }
         try {
             AppUser user = users.save(new AppUser(name, encoder.encode(unusablePassword())));
+            user.setPin(encoder.encode(Pins.normalize(pin)), Instant.now());
+            users.save(user);
             return issueToken(user, null);
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Это имя уже занято");
         }
     }
 
-    /** Вход по одному логину. Пароль не спрашивается: так задумано в простом режиме. */
+    /**
+     * Вход по логину и PIN-коду. Пароля в простом режиме нет: PIN нужен, чтобы посторонний
+     * не вошёл под чужим именем, зная только логин.
+     *
+     * <p>У кого PIN ещё не задан (например, зарегистрировался до появления PIN или владелец
+     * группы сбросил его), входит без PIN, но получает mustSetPin и обязан сразу задать свой.
+     */
     @Transactional
-    public AuthResponse loginSimple(String username) {
+    public AuthResponse loginSimple(String username, String pin) {
         AppUser user = users.findByUsernameIgnoreCase(normalizeUsername(username))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Нет участника с таким именем"));
+        Instant now = Instant.now();
+
+        if (!user.hasPin()) {
+            return issueToken(user, null);
+        }
+        if (user.isPinBlocked(now)) {
+            throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Слишком много неверных попыток. Попробуйте через 15 минут или попросите "
+                            + "владельца группы сбросить PIN-код.");
+        }
+        String value = Pins.normalize(pin);
+        if (value.isEmpty() || !encoder.matches(value, user.getPinHash())) {
+            user.pinFailed(Pins.MAX_FAILS, now.plus(PIN_BLOCK));
+            users.save(user);
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Неверный PIN-код");
+        }
+        user.pinAccepted();
+        users.save(user);
         return issueToken(user, null);
+    }
+
+    /** Задать или сменить PIN-код. Доступно тому, кто уже вошёл. */
+    @Transactional
+    public AuthResponse setPin(AppUser current, String pin) {
+        AppUser user = users.findById(current.getId()).orElseThrow(AuthService::unauthorized);
+        checkPin(pin);
+        user.setPin(encoder.encode(Pins.normalize(pin)), Instant.now());
+        users.save(user);
+        return new AuthResponse(null, user.getId(), user.getUsername(), null,
+                user.isMustChangePassword(), user.isMustSetPin());
+    }
+
+    /**
+     * Сброс PIN-кода участнику: он задаст новый при следующем входе.
+     * Все его входы отзываются. Проверку прав делает вызывающий код (владелец группы).
+     */
+    @Transactional
+    public void resetPin(Long userId) {
+        AppUser user = users.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Участник не найден"));
+        user.clearPin();
+        users.save(user);
+        tokens.deleteAllOfUser(user.getId());
+    }
+
+    private static void checkPin(String pin) {
+        String error = Pins.validate(pin);
+        if (error != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, error);
+        }
     }
 
     private static String unusablePassword() {
@@ -179,7 +240,8 @@ public class AuthService {
         String code = RecoveryCodes.generate();
         user.setRecovery(encoder.encode(RecoveryCodes.normalize(code)), Instant.now());
         users.save(user);
-        return new AuthResponse(null, user.getId(), user.getUsername(), code, user.isMustChangePassword());
+        return new AuthResponse(null, user.getId(), user.getUsername(), code,
+                user.isMustChangePassword(), user.isMustSetPin());
     }
 
     /**
@@ -235,7 +297,7 @@ public class AuthService {
         Instant now = Instant.now();
         tokens.save(new AuthToken(user, TokenUtil.sha256Hex(rawToken), now, now.plus(TOKEN_LIFETIME)));
         return new AuthResponse(rawToken, user.getId(), user.getUsername(),
-                recoveryCode, user.isMustChangePassword());
+                recoveryCode, user.isMustChangePassword(), user.isMustSetPin());
     }
 
     private static ResponseStatusException badRecoveryCode() {

@@ -1,11 +1,13 @@
 package com.example.predictor.membership;
 
+import com.example.predictor.auth.AuthService;
 import com.example.predictor.common.AuthModeConfig;
 import com.example.predictor.domain.AppUser;
 import com.example.predictor.domain.FriendGroup;
 import com.example.predictor.domain.GroupMember;
 import com.example.predictor.domain.GroupRequest;
 import com.example.predictor.domain.GroupRole;
+import com.example.predictor.domain.PinReset;
 import com.example.predictor.domain.RequestKind;
 import com.example.predictor.domain.RequestStatus;
 import com.example.predictor.group.GroupAccess;
@@ -13,6 +15,7 @@ import com.example.predictor.repository.AppUserRepository;
 import com.example.predictor.repository.FriendGroupRepository;
 import com.example.predictor.repository.GroupMemberRepository;
 import com.example.predictor.repository.GroupRequestRepository;
+import com.example.predictor.repository.PinResetRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -63,10 +66,15 @@ public class MembershipService {
     private final GroupMemberRepository members;
     private final AppUserRepository users;
     private final GroupRequestRepository requests;
+    private final AuthService auth;
+    private final PinResetRepository pinResets;
 
     public MembershipService(AuthModeConfig authMode, GroupAccess access, FriendGroupRepository groups,
                              GroupMemberRepository members, AppUserRepository users,
-                             GroupRequestRepository requests) {
+                             GroupRequestRepository requests, AuthService auth,
+                             PinResetRepository pinResets) {
+        this.auth = auth;
+        this.pinResets = pinResets;
         this.authMode = authMode;
         this.access = access;
         this.groups = groups;
@@ -191,6 +199,25 @@ public class MembershipService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Владельца исключить нельзя");
         }
         members.delete(member);
+    }
+
+    /**
+     * Сбрасывает участнику PIN-код: он задаст новый при следующем входе.
+     * Нужно, когда человек забыл PIN или сменил телефон. Все его входы отзываются,
+     * поэтому незаметно это не пройдёт.
+     */
+    @Transactional
+    public void resetMemberPin(AppUser current, Long groupId, Long userId) {
+        access.requireOwner(current, groupId);
+        if (userId.equals(current.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Свой PIN-код меняйте в настройках: для этого сбрасывать его не нужно");
+        }
+        members.findMembership(groupId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "В этой группе нет такого участника"));
+        auth.resetPin(userId);
+        pinResets.save(new PinReset(userId, groupId, current.getId(), Instant.now()));
     }
 
     // ------------------------------------------------------------------ создание

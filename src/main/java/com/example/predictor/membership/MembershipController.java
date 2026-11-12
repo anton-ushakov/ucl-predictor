@@ -87,6 +87,16 @@ public class MembershipController {
         membership.removeMember(auth.authenticate(authorization), groupId, userId);
     }
 
+    /** Сбросить участнику PIN-код: он задаст новый при следующем входе. */
+    @PostMapping("/groups/{groupId}/members/{userId}/reset-pin")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resetMemberPin(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("userId") Long userId) {
+        membership.resetMemberPin(auth.authenticate(authorization), groupId, userId);
+    }
+
     /** Нерешённые заявки и приглашения группы. Доступно владельцу. */
     @GetMapping("/groups/{groupId}/requests")
     public List<RequestDto> groupRequests(

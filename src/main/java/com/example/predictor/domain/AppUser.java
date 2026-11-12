@@ -42,6 +42,24 @@ public class AppUser {
     @Column(name = "recovery_blocked_until")
     private Instant recoveryBlockedUntil;
 
+    // ---- PIN-код простого режима ----
+
+    @Column(name = "pin_hash", length = 100)
+    private String pinHash;
+
+    @Column(name = "pin_set_at")
+    private Instant pinSetAt;
+
+    /** PIN нужно задать при следующем входе: его ещё нет или владелец группы его сбросил. */
+    @Column(name = "must_set_pin", nullable = false)
+    private boolean mustSetPin;
+
+    @Column(name = "pin_fails", nullable = false)
+    private int pinFails;
+
+    @Column(name = "pin_blocked_until")
+    private Instant pinBlockedUntil;
+
     protected AppUser() {
     }
 
@@ -84,6 +102,44 @@ public class AppUser {
         return recoveryBlockedUntil != null && recoveryBlockedUntil.isAfter(now);
     }
 
+    public void setPin(String pinHash, Instant at) {
+        this.pinHash = pinHash;
+        this.pinSetAt = at;
+        this.mustSetPin = false;
+        this.pinFails = 0;
+        this.pinBlockedUntil = null;
+    }
+
+    /** Владелец группы сбросил PIN: участник задаст новый при следующем входе. */
+    public void clearPin() {
+        this.pinHash = null;
+        this.pinSetAt = null;
+        this.mustSetPin = true;
+        this.pinFails = 0;
+        this.pinBlockedUntil = null;
+    }
+
+    public void pinFailed(int maxFails, Instant blockedUntil) {
+        this.pinFails++;
+        if (this.pinFails >= maxFails) {
+            this.pinFails = 0;
+            this.pinBlockedUntil = blockedUntil;
+        }
+    }
+
+    public void pinAccepted() {
+        this.pinFails = 0;
+        this.pinBlockedUntil = null;
+    }
+
+    public boolean isPinBlocked(Instant now) {
+        return pinBlockedUntil != null && pinBlockedUntil.isAfter(now);
+    }
+
+    public boolean hasPin() {
+        return pinHash != null;
+    }
+
     public Long getId() { return id; }
     public String getUsername() { return username; }
     public String getPasswordHash() { return passwordHash; }
@@ -93,4 +149,8 @@ public class AppUser {
     public boolean isMustChangePassword() { return mustChangePassword; }
     public Instant getPasswordChangedAt() { return passwordChangedAt; }
     public Instant getRecoveryBlockedUntil() { return recoveryBlockedUntil; }
+    public String getPinHash() { return pinHash; }
+    public Instant getPinSetAt() { return pinSetAt; }
+    public boolean isMustSetPin() { return mustSetPin; }
+    public Instant getPinBlockedUntil() { return pinBlockedUntil; }
 }

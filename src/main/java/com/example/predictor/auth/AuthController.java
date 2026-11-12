@@ -31,7 +31,8 @@ public class AuthController {
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {
     }
 
-    public record MeResponse(Long id, String username, boolean mustChangePassword) {
+    public record MeResponse(Long id, String username, boolean mustChangePassword,
+                             boolean mustSetPin) {
     }
 
     public record ChangePasswordRequest(@NotBlank String currentPassword,
@@ -46,11 +47,15 @@ public class AuthController {
     public record NewRecoveryCodeRequest(@NotBlank String password) {
     }
 
-    /** Регистрация и вход в простом режиме: нужен только логин. */
+    /** Регистрация и вход в простом режиме: логин и PIN-код. */
     public record SimpleAuthRequest(
             @NotBlank @Size(min = 3, max = 30)
             @Pattern(regexp = USERNAME_PATTERN, message = USERNAME_MESSAGE)
-            String username) {
+            String username,
+            String pin) {
+    }
+
+    public record SetPinRequest(@NotBlank String pin) {
     }
 
     /** Что умеет этот сервер: приложение подстраивает экраны под режим входа. */
@@ -96,19 +101,29 @@ public class AuthController {
     /** Простой режим: первый вход, придумываем имя. */
     @PostMapping("/auth/simple/register")
     public AuthResponse registerSimple(@Valid @RequestBody SimpleAuthRequest request) {
-        return auth.registerSimple(request.username());
+        return auth.registerSimple(request.username(), request.pin());
     }
 
     /** Простой режим: вход на новом телефоне по тому же имени. */
     @PostMapping("/auth/simple/login")
     public AuthResponse loginSimple(@Valid @RequestBody SimpleAuthRequest request) {
-        return auth.loginSimple(request.username());
+        return auth.loginSimple(request.username(), request.pin());
+    }
+
+    /** Задать или сменить PIN-код. */
+    @PostMapping("/auth/simple/pin")
+    public AuthResponse setPin(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @Valid @RequestBody SetPinRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        return auth.setPin(user, request.pin());
     }
 
     @GetMapping("/me")
     public MeResponse me(@RequestHeader(value = "Authorization", required = false) String authorization) {
         AppUser user = auth.authenticate(authorization);
-        return new MeResponse(user.getId(), user.getUsername(), user.isMustChangePassword());
+        return new MeResponse(user.getId(), user.getUsername(), user.isMustChangePassword(),
+                user.isMustSetPin());
     }
 
     /** Смена пароля тем, кто помнит текущий. В ответе новый токен: старые входы отзываются. */

@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,6 +46,15 @@ public class MembershipService {
     public record RequestDto(Long id, Long groupId, String groupName, Long userId, String username,
                              String kind, String createdByName, Instant createdAt,
                              boolean canDecide, boolean canCancel, String message) {
+    }
+
+    /** Участник приложения глазами владельца группы: кого можно позвать, кто уже внутри. */
+    public record CandidateDto(Long userId, String username, boolean member, boolean owner,
+                               boolean pendingInvite, boolean pendingRequest) {
+        /** Можно отметить галочкой для приглашения. */
+        public boolean invitable() {
+            return !member && !pendingInvite;
+        }
     }
 
     private final AuthModeConfig authMode;
@@ -98,6 +108,89 @@ public class MembershipService {
         }
         result.sort((a, b) -> a.name().compareToIgnoreCase(b.name()));
         return result;
+    }
+
+    /** Все участники приложения с пометками: кто в группе, кого уже позвали, кто просится. */
+    @Transactional(readOnly = true)
+    public List<CandidateDto> candidates(AppUser current, Long groupId) {
+        authMode.requireRequests();
+        access.requireOwner(current, groupId);
+
+        Map<Long, GroupRole> roles = new HashMap<>();
+        for (GroupMember gm : members.findAllWithUser(groupId)) {
+            roles.put(gm.getUser().getId(), gm.getRole());
+        }
+        Map<Long, RequestKind> pending = new HashMap<>();
+        for (GroupRequest r : requests.findByGroupIdAndStatusOrderByCreatedAtDesc(
+                groupId, RequestStatus.PENDING)) {
+            pending.put(r.getUserId(), r.getKind());
+        }
+
+        List<CandidateDto> result = new ArrayList<>();
+        for (AppUser user : users.findAll()) {
+            GroupRole role = roles.get(user.getId());
+            RequestKind kind = pending.get(user.getId());
+            result.add(new CandidateDto(user.getId(), user.getUsername(),
+                    role != null, role == GroupRole.OWNER,
+                    kind == RequestKind.INVITE, kind == RequestKind.REQUEST));
+        }
+        result.sort((a, b) -> a.username().compareToIgnoreCase(b.username()));
+        return result;
+    }
+
+    /**
+     * Приглашает сразу нескольких участников. Тех, кто уже в группе или уже приглашён, пропускает:
+     * так кнопка «позвать всех» не спотыкается на полпути.
+     */
+    @Transactional
+    public List<RequestDto> inviteMany(AppUser current, Long groupId, List<Long> userIds) {
+        authMode.requireRequests();
+        FriendGroup group = access.requireOwner(current, groupId).group();
+
+        Set<Long> inGroup = new HashSet<>();
+        for (GroupMember gm : members.findAllWithUser(groupId)) {
+            inGroup.add(gm.getUser().getId());
+        }
+        Set<Long> alreadyPending = new HashSet<>();
+        for (GroupRequest r : requests.findByGroupIdAndStatusOrderByCreatedAtDesc(
+                groupId, RequestStatus.PENDING)) {
+            alreadyPending.add(r.getUserId());
+        }
+
+        List<RequestDto> created = new ArrayList<>();
+        for (Long userId : new LinkedHashSet<>(userIds)) {
+            if (inGroup.contains(userId) || alreadyPending.contains(userId)) {
+                continue;
+            }
+            AppUser invitee = users.findById(userId).orElse(null);
+            if (invitee == null) {
+                continue;
+            }
+            GroupRequest saved = create(groupId, userId, RequestKind.INVITE, current.getId());
+            created.add(toDto(saved, group.getName(), invitee.getUsername(),
+                    current.getUsername(), current));
+        }
+        return created;
+    }
+
+    /**
+     * Исключает участника из группы. Его прошлые прогнозы и результаты остаются в истории:
+     * подведённые итоги не переписываются.
+     */
+    @Transactional
+    public void removeMember(AppUser current, Long groupId, Long userId) {
+        access.requireOwner(current, groupId);
+        if (userId.equals(current.getId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Владелец не может исключить сам себя");
+        }
+        GroupMember member = members.findMembership(groupId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "В этой группе нет такого участника"));
+        if (member.getRole() == GroupRole.OWNER) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Владельца исключить нельзя");
+        }
+        members.delete(member);
     }
 
     // ------------------------------------------------------------------ создание

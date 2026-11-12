@@ -12,6 +12,7 @@ import com.example.predictor.domain.GroupRole;
 import com.example.predictor.domain.RevealMode;
 import com.example.predictor.domain.ScoreBasis;
 import com.example.predictor.domain.SubmissionMode;
+import com.example.predictor.scoring.Scoring;
 import com.example.predictor.domain.Tiebreaker;
 import com.example.predictor.group.GroupAccess.Membership;
 import com.example.predictor.repository.AppUserRepository;
@@ -42,7 +43,9 @@ public class GroupService {
      */
     public record SettingsDto(int lockMinutesBefore, List<String> tiebreakers, RevealMode revealMode,
                               boolean countExtraTime, boolean countPenalties,
-                              SubmissionMode submissionMode) {
+                              SubmissionMode submissionMode,
+                              int exactScorePoints, int goalDiffPoints, int outcomePoints,
+                              String scoringDescription) {
     }
 
     /**
@@ -134,7 +137,9 @@ public class GroupService {
                 .toList();
         SettingsDto settings = new SettingsDto(g.getLockMinutesBefore(),
                 g.tiebreakerList().stream().map(Enum::name).toList(), g.getRevealMode(),
-                g.scoreBasis().extraTime(), g.scoreBasis().penalties(), g.getSubmissionMode());
+                g.scoreBasis().extraTime(), g.scoreBasis().penalties(), g.getSubmissionMode(),
+                g.scoring().exactScorePoints(), g.scoring().goalDiffPoints(),
+                g.scoring().outcomePoints(), g.scoring().describe());
         List<OptionDto> tiebreakerOptions = Arrays.stream(Tiebreaker.values())
                 .map(t -> new OptionDto(t.name(), t.getDescription())).toList();
         List<OptionDto> revealOptions = Arrays.stream(RevealMode.values())
@@ -149,7 +154,8 @@ public class GroupService {
     @Transactional
     public SettingsDto updateSettings(AppUser current, Long groupId, int lockMinutesBefore,
                                       List<String> tiebreakerNames, RevealMode revealMode,
-                                      ScoreBasis scoreBasis, SubmissionMode submissionMode) {
+                                      ScoreBasis scoreBasis, SubmissionMode submissionMode,
+                                      Scoring scoring) {
         Membership ms = access.requireOwner(current, groupId);
         FriendGroup group = ms.group();
 
@@ -171,10 +177,13 @@ public class GroupService {
             tiebreakers.add(t);
         }
 
-        group.changeSettings(lockMinutesBefore, tiebreakers, revealMode, scoreBasis, submissionMode);
+        group.changeSettings(lockMinutesBefore, tiebreakers, revealMode, scoreBasis, submissionMode,
+                scoring);
         groups.save(group);
         return new SettingsDto(lockMinutesBefore, tiebreakers.stream().map(Enum::name).toList(), revealMode,
-                scoreBasis.extraTime(), scoreBasis.penalties(), submissionMode);
+                scoreBasis.extraTime(), scoreBasis.penalties(), submissionMode,
+                scoring.exactScorePoints(), scoring.goalDiffPoints(), scoring.outcomePoints(),
+                scoring.describe());
     }
 
     /**

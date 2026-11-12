@@ -13,10 +13,14 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api")
 public class AuthController {
 
+    /** Имя участника: русские и латинские буквы, цифры и знаки _ . - */
+    static final String USERNAME_PATTERN = "[\\p{IsCyrillic}A-Za-z0-9_.-]+";
+    static final String USERNAME_MESSAGE = "Имя: русские или латинские буквы, цифры и знаки _ . -";
+
     public record RegisterRequest(
             @NotBlank
             @Size(min = 3, max = 30)
-            @Pattern(regexp = "[A-Za-z0-9_.-]+", message = "только латинские буквы, цифры и символы _ . -")
+            @Pattern(regexp = USERNAME_PATTERN, message = USERNAME_MESSAGE)
             String username,
 
             @NotBlank
@@ -45,7 +49,7 @@ public class AuthController {
     /** Регистрация и вход в простом режиме: нужен только логин. */
     public record SimpleAuthRequest(
             @NotBlank @Size(min = 3, max = 30)
-            @Pattern(regexp = "[A-Za-z0-9_.-]+", message = "Имя: латиница, цифры и знаки _ . -")
+            @Pattern(regexp = USERNAME_PATTERN, message = USERNAME_MESSAGE)
             String username) {
     }
 

@@ -24,7 +24,8 @@ public final class RoundDtos {
     public record RulesDto(int lockMinutesBefore, List<String> tiebreakers, RevealMode revealMode,
                            boolean countExtraTime, boolean countPenalties, String scoreDescription,
                            SubmissionMode submissionMode, String submissionDescription,
-                           boolean frozen) {
+                           int exactScorePoints, int goalDiffPoints, int outcomePoints,
+                           String scoringDescription, boolean frozen) {
     }
 
     /**

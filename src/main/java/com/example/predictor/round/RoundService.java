@@ -21,7 +21,7 @@ import com.example.predictor.repository.PredictionRepository;
 import com.example.predictor.repository.RoundResultRepository;
 import com.example.predictor.round.RoundDtos.*;
 import com.example.predictor.round.SubmissionValidator.SubmissionException;
-import com.example.predictor.scoring.ScoringService;
+import com.example.predictor.scoring.Scoring;
 import com.example.predictor.standings.RoundWeeks;
 import com.example.predictor.standings.StandingsCalculator;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -58,7 +58,6 @@ public class RoundService {
     }
 
     private static final int HISTORY_WEEKS_BACK = 12;
-    private static final ScoringService SCORING = new ScoringService();
 
     private final GroupAccess access;
     private final RulesService rulesService;
@@ -211,12 +210,12 @@ public class RoundService {
                     if (!p.getUser().getId().equals(me)) {
                         others.add(new OtherPrediction(p.getUser().getId(),
                                 names.getOrDefault(p.getUser().getId(), "?"),
-                                p.getHomeGoals(), p.getAwayGoals(), p.getCreatedAt(), pointsFor(m, p, info)));
+                                p.getHomeGoals(), p.getAwayGoals(), p.getCreatedAt(), pointsFor(m, p, info, rules.scoring())));
                     }
                 }
             }
             MyPrediction myView = mine == null ? null : new MyPrediction(
-                    mine.getHomeGoals(), mine.getAwayGoals(), mine.getCreatedAt(), pointsFor(m, mine, info));
+                    mine.getHomeGoals(), mine.getAwayGoals(), mine.getCreatedAt(), pointsFor(m, mine, info, rules.scoring()));
 
             ScoreDetail detail = m.getHomeScore() == null ? null : new ScoreDetail(
                     m.getHomeScore(), m.getAwayScore(), m.getExtraHome(), m.getExtraAway(),
@@ -286,7 +285,9 @@ public class RoundService {
                 new RulesDto(rules.lockMinutesBefore(),
                         rules.tiebreakers().stream().map(Enum::name).toList(), rules.revealMode(),
                         basis.extraTime(), basis.penalties(), basis.describe(),
-                        rules.submissionMode(), rules.submissionMode().getDescription(), frozen),
+                        rules.submissionMode(), rules.submissionMode().getDescription(),
+                        rules.scoring().exactScorePoints(), rules.scoring().goalDiffPoints(),
+                        rules.scoring().outcomePoints(), rules.scoring().describe(), frozen),
                 views, canSubmit, open, submitWarning(rules.submissionMode()), finalized, standings, buyers, receivers,
                 notParticipated, ScoreDecisionService.countPending(infos.values()), decisionsForMe, note);
     }
@@ -314,7 +315,7 @@ public class RoundService {
         }
         List<Long> participants = RoundParticipants.select(toMembers(memberList), predictors);
         List<StandingsCalculator.Row> rows = StandingsCalculator.calculate(
-                participants, finished, guesses, rules.tiebreakers());
+                participants, finished, guesses, rules.tiebreakers(), rules.scoring());
 
         List<StandingRow> result = new ArrayList<>();
         for (StandingsCalculator.Row r : rows) {
@@ -401,11 +402,12 @@ public class RoundService {
 
     // ------------------------------------------------------------------ вспомогательное
 
-    private static Integer pointsFor(FootballMatch m, Prediction p, ScoreDecisionService.Info info) {
+    private static Integer pointsFor(FootballMatch m, Prediction p, ScoreDecisionService.Info info,
+                                     Scoring scoring) {
         if (!info.kind().counted()) {
             return null;
         }
-        return SCORING.points(p.getHomeGoals(), p.getAwayGoals(),
+        return scoring.points(p.getHomeGoals(), p.getAwayGoals(),
                 m.scoreHome(info.basis()), m.scoreAway(info.basis()));
     }
 

@@ -2,10 +2,13 @@ package com.example.predictor.membership;
 
 import com.example.predictor.auth.AuthService;
 import com.example.predictor.domain.AppUser;
+import com.example.predictor.membership.MembershipService.CandidateDto;
 import com.example.predictor.membership.MembershipService.OpenGroupDto;
 import com.example.predictor.membership.MembershipService.RequestDto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +20,9 @@ import java.util.List;
 public class MembershipController {
 
     public record InviteRequest(@NotBlank String username) {
+    }
+
+    public record BulkInviteRequest(@NotEmpty @Size(max = 200) List<Long> userIds) {
     }
 
     private final AuthService auth;
@@ -51,6 +57,34 @@ public class MembershipController {
             @PathVariable("groupId") Long groupId,
             @Valid @RequestBody InviteRequest request) {
         return membership.invite(auth.authenticate(authorization), groupId, request.username());
+    }
+
+    /** Все участники приложения с пометками: для экрана выбора галочками. */
+    @GetMapping("/groups/{groupId}/candidates")
+    public List<CandidateDto> candidates(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId) {
+        return membership.candidates(auth.authenticate(authorization), groupId);
+    }
+
+    /** Пригласить сразу нескольких отмеченных участников. */
+    @PostMapping("/groups/{groupId}/invites/bulk")
+    @ResponseStatus(HttpStatus.CREATED)
+    public List<RequestDto> inviteMany(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @Valid @RequestBody BulkInviteRequest request) {
+        return membership.inviteMany(auth.authenticate(authorization), groupId, request.userIds());
+    }
+
+    /** Исключить участника из группы. История его прогнозов сохраняется. */
+    @DeleteMapping("/groups/{groupId}/members/{userId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removeMember(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("userId") Long userId) {
+        membership.removeMember(auth.authenticate(authorization), groupId, userId);
     }
 
     /** Нерешённые заявки и приглашения группы. Доступно владельцу. */

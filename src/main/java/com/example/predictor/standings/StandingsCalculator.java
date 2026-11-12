@@ -1,7 +1,8 @@
 package com.example.predictor.standings;
 
 import com.example.predictor.domain.Tiebreaker;
-import com.example.predictor.scoring.ScoringService;
+import com.example.predictor.scoring.Scoring;
+import com.example.predictor.scoring.Scoring.Hit;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -21,7 +22,7 @@ public final class StandingsCalculator {
     /** Ошибка по голам за пропущенный (не спрогнозированный) матч. */
     public static final int MISSED_PREDICTION_ERROR = 10;
 
-    private static final ScoringService SCORING = new ScoringService();
+
 
     /** Сыгранный матч. */
     public record FinishedMatch(long matchId, int homeScore, int awayScore) {
@@ -47,7 +48,8 @@ public final class StandingsCalculator {
     }
 
     public static List<Row> calculate(Collection<Long> participants, List<FinishedMatch> matches,
-                                      Collection<Guess> guesses, List<Tiebreaker> tiebreakers) {
+                                      Collection<Guess> guesses, List<Tiebreaker> tiebreakers,
+                                      Scoring scoring) {
         Map<Long, Map<Long, Guess>> byUser = new HashMap<>();
         for (Guess g : guesses) {
             byUser.computeIfAbsent(g.userId(), k -> new HashMap<>()).put(g.matchId(), g);
@@ -68,14 +70,15 @@ public final class StandingsCalculator {
                     error += MISSED_PREDICTION_ERROR;
                     continue;
                 }
-                int p = SCORING.points(g.homeGoals(), g.awayGoals(), m.homeScore(), m.awayScore());
-                points += p;
-                if (p == ScoringService.POINTS_EXACT_SCORE) {
+                Hit h = Scoring.hit(g.homeGoals(), g.awayGoals(), m.homeScore(), m.awayScore());
+                points += scoring.points(h);
+                if (h == Hit.EXACT) {
                     exact++;
-                } else if (p == ScoringService.POINTS_OUTCOME) {
+                } else if (h != Hit.MISS) {
+                    // исход угадан: и когда совпала только разница мячей, и когда только исход
                     outcome++;
                 }
-                if (g.homeGoals() - g.awayGoals() == m.homeScore() - m.awayScore()) {
+                if (h == Hit.EXACT || h == Hit.GOAL_DIFF) {
                     diff++;
                 }
                 error += Math.abs(g.homeGoals() - m.homeScore()) + Math.abs(g.awayGoals() - m.awayScore());

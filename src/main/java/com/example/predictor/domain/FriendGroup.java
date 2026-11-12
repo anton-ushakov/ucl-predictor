@@ -1,5 +1,6 @@
 package com.example.predictor.domain;
 
+import com.example.predictor.scoring.Scoring;
 import jakarta.persistence.*;
 
 import java.time.Instant;
@@ -54,14 +55,30 @@ public class FriendGroup {
     @Column(name = "submission_mode", nullable = false, length = 20)
     private SubmissionMode submissionMode = SubmissionMode.WHOLE_ROUND;
 
+    @Column(name = "exact_score_points", nullable = false)
+    private int exactScorePoints = Scoring.DEFAULT.exactScorePoints();
+
+    @Column(name = "goal_diff_points", nullable = false)
+    private int goalDiffPoints = Scoring.DEFAULT.goalDiffPoints();
+
+    @Column(name = "outcome_points", nullable = false)
+    private int outcomePoints = Scoring.DEFAULT.outcomePoints();
+
     public void changeSettings(int lockMinutesBefore, List<Tiebreaker> tiebreakerList, RevealMode revealMode,
-                               ScoreBasis scoreBasis, SubmissionMode submissionMode) {
+                               ScoreBasis scoreBasis, SubmissionMode submissionMode, Scoring scoring) {
         this.submissionMode = submissionMode;
+        this.exactScorePoints = scoring.exactScorePoints();
+        this.goalDiffPoints = scoring.goalDiffPoints();
+        this.outcomePoints = scoring.outcomePoints();
         this.lockMinutesBefore = lockMinutesBefore;
         this.tiebreakers = Tiebreaker.toCsv(tiebreakerList);
         this.revealMode = revealMode;
         this.countExtraTime = scoreBasis.extraTime();
         this.countPenalties = scoreBasis.penalties();
+    }
+
+    public Scoring scoring() {
+        return new Scoring(exactScorePoints, goalDiffPoints, outcomePoints);
     }
 
     public SubmissionMode getSubmissionMode() {

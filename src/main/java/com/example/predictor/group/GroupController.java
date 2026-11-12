@@ -5,6 +5,7 @@ import com.example.predictor.domain.AppUser;
 import com.example.predictor.domain.RevealMode;
 import com.example.predictor.domain.ScoreBasis;
 import com.example.predictor.domain.SubmissionMode;
+import com.example.predictor.scoring.Scoring;
 import com.example.predictor.group.GroupService.GroupDetailDto;
 import com.example.predictor.group.GroupService.GroupDto;
 import com.example.predictor.group.GroupService.ResetPasswordDto;
@@ -36,7 +37,10 @@ public class GroupController {
             @NotNull RevealMode revealMode,
             Boolean countExtraTime,
             Boolean countPenalties,
-            SubmissionMode submissionMode) {
+            SubmissionMode submissionMode,
+            @Min(0) @Max(100) Integer exactScorePoints,
+            @Min(0) @Max(100) Integer goalDiffPoints,
+            @Min(0) @Max(100) Integer outcomePoints) {
     }
 
     private final AuthService auth;
@@ -84,8 +88,15 @@ public class GroupController {
                 Boolean.TRUE.equals(request.countPenalties()));
         SubmissionMode submissionMode = request.submissionMode() == null
                 ? SubmissionMode.WHOLE_ROUND : request.submissionMode();
+        Scoring scoring = new Scoring(
+                request.exactScorePoints() == null ? Scoring.DEFAULT.exactScorePoints()
+                        : request.exactScorePoints(),
+                request.goalDiffPoints() == null ? Scoring.DEFAULT.goalDiffPoints()
+                        : request.goalDiffPoints(),
+                request.outcomePoints() == null ? Scoring.DEFAULT.outcomePoints()
+                        : request.outcomePoints());
         return groups.updateSettings(user, groupId, request.lockMinutesBefore(),
-                request.tiebreakers(), request.revealMode(), scoreBasis, submissionMode);
+                request.tiebreakers(), request.revealMode(), scoreBasis, submissionMode, scoring);
     }
 
     /** Сброс пароля участнику (только владелец). Временный пароль показывается один раз. */

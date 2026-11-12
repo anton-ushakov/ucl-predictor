@@ -4,6 +4,7 @@ import com.example.predictor.domain.FriendGroup;
 import com.example.predictor.domain.RevealMode;
 import com.example.predictor.domain.ScoreBasis;
 import com.example.predictor.domain.SubmissionMode;
+import com.example.predictor.scoring.Scoring;
 import com.example.predictor.domain.Tiebreaker;
 import com.example.predictor.repository.RoundRulesRepository;
 import org.springframework.stereotype.Service;
@@ -23,7 +24,7 @@ import java.util.List;
 public class RulesService {
 
     public record Rules(int lockMinutesBefore, List<Tiebreaker> tiebreakers, RevealMode revealMode,
-                        ScoreBasis scoreBasis, SubmissionMode submissionMode) {
+                        ScoreBasis scoreBasis, SubmissionMode submissionMode, Scoring scoring) {
 
         /** Момент, начиная с которого прогноз на матч принять уже нельзя. */
         public Instant lockAt(Instant kickoff) {
@@ -39,7 +40,7 @@ public class RulesService {
 
     public Rules current(FriendGroup group) {
         return new Rules(group.getLockMinutesBefore(), group.tiebreakerList(), group.getRevealMode(),
-                group.scoreBasis(), group.getSubmissionMode());
+                group.scoreBasis(), group.getSubmissionMode(), group.scoring());
     }
 
     @Transactional(readOnly = true)
@@ -47,7 +48,7 @@ public class RulesService {
         return roundRules.findByGroupIdAndRoundWeek(group.getId(), week)
                 .map(r -> new Rules(r.getLockMinutesBefore(),
                         Tiebreaker.parseList(r.getTiebreakers()), r.getRevealMode(), r.scoreBasis(),
-                        r.getSubmissionMode()))
+                        r.getSubmissionMode(), r.scoring()))
                 .orElseGet(() -> current(group));
     }
 
@@ -63,6 +64,8 @@ public class RulesService {
         ScoreBasis basis = group.scoreBasis();
         roundRules.freeze(group.getId(), week, group.getLockMinutesBefore(),
                 group.getTiebreakers(), group.getRevealMode().name(),
-                basis.extraTime(), basis.penalties(), group.getSubmissionMode().name());
+                basis.extraTime(), basis.penalties(), group.getSubmissionMode().name(),
+                group.scoring().exactScorePoints(), group.scoring().goalDiffPoints(),
+                group.scoring().outcomePoints());
     }
 }

@@ -21,7 +21,7 @@ import com.example.predictor.repository.NotificationRepository;
 import com.example.predictor.repository.NotificationSettingsRepository;
 import com.example.predictor.repository.PredictionRepository;
 import com.example.predictor.repository.RoundResultRepository;
-import com.example.predictor.scoring.ScoringService;
+import com.example.predictor.scoring.Scoring;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -57,7 +57,6 @@ public class NotificationGenerator {
     /** Насколько старые события ещё интересны. */
     private static final Duration FRESH = Duration.ofHours(24);
 
-    private static final ScoringService SCORING = new ScoringService();
 
     private final FriendGroupRepository groups;
     private final GroupMemberRepository members;
@@ -213,7 +212,8 @@ public class NotificationGenerator {
                 Prediction p = mine.get(userId);
                 String guess = p == null ? null : p.getHomeGoals() + ":" + p.getAwayGoals();
                 Integer points = p == null ? null
-                        : SCORING.points(p.getHomeGoals(), p.getAwayGoals(), homeScore, awayScore);
+                        : rules.scoring().points(p.getHomeGoals(), p.getAwayGoals(),
+                                homeScore, awayScore);
                 Text text = NotificationTexts.matchFinished(group.getName(), m.getHomeTeam(),
                         m.getAwayTeam(), homeScore, awayScore, guess, points);
                 out.add(new Notification(userId, group.getId(), NotificationType.MATCH_FINISHED, key,
@@ -246,7 +246,9 @@ public class NotificationGenerator {
                 continue;
             }
             LocalDate week = dayMatches.get(0).getRoundWeek();
-            ScoreBasis basis = rulesService.rulesFor(group, week).scoreBasis();
+            Rules dayRules = rulesService.rulesFor(group, week);
+            ScoreBasis basis = dayRules.scoreBasis();
+            Scoring scoring = dayRules.scoring();
             List<FootballMatch> counted = dayMatches.stream()
                     .filter(m -> m.isFinished() && m.missingParts(basis).isEmpty())
                     .toList();
@@ -262,7 +264,7 @@ public class NotificationGenerator {
                 if (!m.isFinished() || !m.missingParts(basis).isEmpty()) {
                     continue;
                 }
-                int points = SCORING.points(p.getHomeGoals(), p.getAwayGoals(),
+                int points = scoring.points(p.getHomeGoals(), p.getAwayGoals(),
                         m.scoreHome(basis), m.scoreAway(basis));
                 weekPoints.merge(p.getUser().getId(), points, Integer::sum);
                 if (counted.stream().anyMatch(c -> c.getId().equals(m.getId()))) {

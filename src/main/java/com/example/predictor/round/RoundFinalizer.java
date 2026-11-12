@@ -139,7 +139,7 @@ public class RoundFinalizer {
         }
 
         List<StandingsCalculator.Row> rows = StandingsCalculator.calculate(
-                participants, finished, guesses, rules.tiebreakers());
+                participants, finished, guesses, rules.tiebreakers(), rules.scoring());
 
         String tiebreakersCsv = Tiebreaker.toCsv(rules.tiebreakers());
         Instant now = Instant.now();

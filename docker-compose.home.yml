@@ -28,7 +28,7 @@ services:
       POSTGRES_USER: predictor
       POSTGRES_PASSWORD: ${DB_PASSWORD:?задайте DB_PASSWORD в файле .env}
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - db-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U predictor -d ucl_predictor"]
       interval: 10s
@@ -65,7 +65,7 @@ services:
     profiles: ["tunnel"]
     depends_on:
       - app
-    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:?задайте TUNNEL_TOKEN в файле .env}
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
 
 volumes:
   db-data:

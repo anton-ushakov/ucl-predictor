@@ -13,8 +13,23 @@ public class FootballMatch {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "external_id", nullable = false, unique = true)
+    /** Номер матча в football-data.org. У матчей, добавленных вручную, его нет. */
+    @Column(name = "external_id", unique = true)
     private Long externalId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "competition_id")
+    private Competition competition;
+
+    /**
+     * Группа, владелец которой добавил матч вручную. Такой матч виден только этой группе.
+     * У матчей из football-data.org null: они общие для всех.
+     */
+    @Column(name = "owner_group_id")
+    private Long ownerGroupId;
+
+    @Column(name = "created_by")
+    private Long createdBy;
 
     @Column(name = "home_team", nullable = false, length = 100)
     private String homeTeam;
@@ -68,6 +83,79 @@ public class FootballMatch {
 
     public FootballMatch(Long externalId) {
         this.externalId = externalId;
+    }
+
+    /** Матч, добавленный владельцем группы вручную. */
+    public FootballMatch(Competition competition, Long ownerGroupId, Long createdBy,
+                         String homeTeam, String awayTeam, Instant kickoffAt, LocalDate roundWeek,
+                         String stage) {
+        this.competition = competition;
+        this.ownerGroupId = ownerGroupId;
+        this.createdBy = createdBy;
+        this.homeTeam = homeTeam;
+        this.awayTeam = awayTeam;
+        this.kickoffAt = kickoffAt;
+        this.roundWeek = roundWeek;
+        this.stage = stage;
+        this.status = MatchStatus.SCHEDULED;
+    }
+
+    /** Матч добавлен вручную: счёт вводит владелец группы, из источника он не придёт. */
+    public boolean isManual() {
+        return externalId == null;
+    }
+
+    public void setCompetition(Competition competition) {
+        this.competition = competition;
+    }
+
+    /** Правит у ручного матча то, что владелец мог указать с ошибкой. */
+    public void editManual(String homeTeam, String awayTeam, Instant kickoffAt, LocalDate roundWeek,
+                           String stage) {
+        this.homeTeam = homeTeam;
+        this.awayTeam = awayTeam;
+        this.kickoffAt = kickoffAt;
+        this.roundWeek = roundWeek;
+        this.stage = stage;
+    }
+
+    /**
+     * Владелец вводит счёт ручного матча. Добавочное время и пенальти задаются отдельно
+     * (голы только этого периода), null — такого периода не было.
+     */
+    public void setManualScore(Integer homeScore, Integer awayScore,
+                               Integer extraHome, Integer extraAway,
+                               Integer penHome, Integer penAway) {
+        if (homeScore == null || awayScore == null) {
+            this.status = MatchStatus.SCHEDULED;
+            this.homeScore = null;
+            this.awayScore = null;
+            this.extraHome = null;
+            this.extraAway = null;
+            this.penHome = null;
+            this.penAway = null;
+            this.duration = null;
+            return;
+        }
+        this.status = MatchStatus.FINISHED;
+        this.homeScore = homeScore;
+        this.awayScore = awayScore;
+        this.extraHome = extraHome;
+        this.extraAway = extraAway;
+        this.penHome = penHome;
+        this.penAway = penAway;
+        if (penHome != null || penAway != null) {
+            this.duration = "PENALTY_SHOOTOUT";
+        } else if (extraHome != null || extraAway != null) {
+            this.duration = "EXTRA_TIME";
+        } else {
+            this.duration = "REGULAR";
+        }
+    }
+
+    /** Владелец отменил ручной матч: он перестаёт учитываться в итогах. */
+    public void cancelManual() {
+        this.status = MatchStatus.CANCELLED;
     }
 
     /**
@@ -170,6 +258,9 @@ public class FootballMatch {
 
     public Long getId() { return id; }
     public Long getExternalId() { return externalId; }
+    public Competition getCompetition() { return competition; }
+    public Long getOwnerGroupId() { return ownerGroupId; }
+    public Long getCreatedBy() { return createdBy; }
     public String getHomeTeam() { return homeTeam; }
     public String getAwayTeam() { return awayTeam; }
     public Instant getKickoffAt() { return kickoffAt; }

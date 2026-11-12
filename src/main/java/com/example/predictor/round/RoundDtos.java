@@ -94,8 +94,12 @@ public final class RoundDtos {
                             int pendingDecisions, int decisionsForMe, String note) {
     }
 
+    /**
+     * matches: сколько матчей владелец отобрал в этот тур. selectable=true: состав тура ещё можно
+     * менять (это текущая или следующая неделя), и владельцу группы показывается кнопка выбора матчей.
+     */
     public record RoundSummary(LocalDate week, RoundStatus status, int matches, int predictedByMe,
-                               int openForMe, Instant firstKickoff) {
+                               int openForMe, Instant firstKickoff, boolean selectable) {
     }
 
     public record Entry(@NotNull Long matchId,

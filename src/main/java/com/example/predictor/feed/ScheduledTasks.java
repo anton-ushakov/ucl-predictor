@@ -36,8 +36,8 @@ public class ScheduledTasks {
         if (client.isConfigured()) {
             try {
                 MatchSyncService.Result r = sync.sync();
-                log.info("Матчи обновлены: получено {}, создано {}, обновлено {}, пропущено {}",
-                        r.fetched(), r.created(), r.updated(), r.skipped());
+                log.info("Матчи обновлены: турниров {}, получено {}, создано {}, обновлено {}, пропущено {}",
+                        r.competitions(), r.fetched(), r.created(), r.updated(), r.skipped());
             } catch (RuntimeException e) {
                 log.warn("Не удалось обновить матчи из football-data.org: {}", e.getMessage());
             }

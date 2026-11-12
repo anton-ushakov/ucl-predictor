@@ -16,7 +16,6 @@ import com.example.predictor.group.RulesService.Rules;
 import com.example.predictor.notify.NotificationTexts.Text;
 import com.example.predictor.repository.FriendGroupRepository;
 import com.example.predictor.repository.GroupMemberRepository;
-import com.example.predictor.repository.MatchRepository;
 import com.example.predictor.repository.NotificationRepository;
 import com.example.predictor.repository.NotificationSettingsRepository;
 import com.example.predictor.repository.PredictionRepository;
@@ -60,7 +59,7 @@ public class NotificationGenerator {
 
     private final FriendGroupRepository groups;
     private final GroupMemberRepository members;
-    private final MatchRepository matches;
+    private final com.example.predictor.round.RoundMatches roundMatches;
     private final PredictionRepository predictions;
     private final RoundResultRepository results;
     private final NotificationRepository notifications;
@@ -69,13 +68,14 @@ public class NotificationGenerator {
     private final AppTime time;
 
     public NotificationGenerator(FriendGroupRepository groups, GroupMemberRepository members,
-                                 MatchRepository matches, PredictionRepository predictions,
+                                 com.example.predictor.round.RoundMatches roundMatches,
+                                 PredictionRepository predictions,
                                  RoundResultRepository results, NotificationRepository notifications,
                                  NotificationSettingsRepository settings, RulesService rulesService,
                                  AppTime time) {
         this.groups = groups;
         this.members = members;
-        this.matches = matches;
+        this.roundMatches = roundMatches;
         this.predictions = predictions;
         this.results = results;
         this.notifications = notifications;
@@ -128,7 +128,7 @@ public class NotificationGenerator {
         // матчи, приём на которые закроется в ближайший час
         List<FootballMatch> soon = new ArrayList<>();
         Instant earliestLock = null;
-        for (FootballMatch m : matches.findByRoundWeekBetweenOrderByKickoffAtAscIdAsc(from, to)) {
+        for (FootballMatch m : roundMatches.forRangeFlat(group.getId(), from, to)) {
             if (m.getStatus() != MatchStatus.SCHEDULED) {
                 continue;
             }
@@ -182,7 +182,7 @@ public class NotificationGenerator {
         Instant freshSince = now.minus(FRESH);
 
         Map<LocalDate, List<Prediction>> byWeek = new HashMap<>();
-        for (FootballMatch m : matches.findByRoundWeekBetweenOrderByKickoffAtAscIdAsc(from, to)) {
+        for (FootballMatch m : roundMatches.forRangeFlat(group.getId(), from, to)) {
             if (!m.isFinished() || m.getKickoffAt().isBefore(freshSince)) {
                 continue;
             }
@@ -233,7 +233,7 @@ public class NotificationGenerator {
 
         // матчи по игровым дням (по времени группы)
         Map<LocalDate, List<FootballMatch>> byDay = new LinkedHashMap<>();
-        for (FootballMatch m : matches.findByRoundWeekBetweenOrderByKickoffAtAscIdAsc(from, to)) {
+        for (FootballMatch m : roundMatches.forRangeFlat(group.getId(), from, to)) {
             byDay.computeIfAbsent(m.getKickoffAt().atZone(time.zone()).toLocalDate(),
                     d -> new ArrayList<>()).add(m);
         }

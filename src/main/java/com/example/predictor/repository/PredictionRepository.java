@@ -35,6 +35,16 @@ public interface PredictionRepository extends JpaRepository<Prediction, Long> {
     List<LocalDate> findWeeksWithPredictions(@Param("groupId") Long groupId,
                                              @Param("from") LocalDate from, @Param("to") LocalDate to);
 
+    /** Есть ли в группе хотя бы один прогноз на этот матч. */
+    @Query("select count(p) > 0 from Prediction p where p.group.id = :groupId and p.match.id = :matchId")
+    boolean existsForMatch(@Param("groupId") Long groupId, @Param("matchId") Long matchId);
+
+    /** Матчи группы, на которые уже есть прогнозы (из указанных). */
+    @Query("select distinct p.match.id from Prediction p "
+            + "where p.group.id = :groupId and p.match.id in :matchIds")
+    List<Long> findPredictedMatchIds(@Param("groupId") Long groupId,
+                                     @Param("matchIds") Collection<Long> matchIds);
+
     /** Все пары "группа и тур", где есть прогнозы. */
     @Query("select new com.example.predictor.repository.GroupRound(p.group.id, m.roundWeek) "
             + "from Prediction p join p.match m group by p.group.id, m.roundWeek")

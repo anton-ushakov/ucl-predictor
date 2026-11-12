@@ -12,7 +12,6 @@ import com.example.predictor.group.RulesService.Rules;
 import com.example.predictor.repository.FriendGroupRepository;
 import com.example.predictor.repository.GroupMemberRepository;
 import com.example.predictor.repository.GroupRound;
-import com.example.predictor.repository.MatchRepository;
 import com.example.predictor.repository.PredictionRepository;
 import com.example.predictor.repository.RoundResultRepository;
 import com.example.predictor.standings.StandingsCalculator;
@@ -41,7 +40,7 @@ public class RoundFinalizer {
     private static final Logger log = LoggerFactory.getLogger(RoundFinalizer.class);
 
     private final PredictionRepository predictions;
-    private final MatchRepository matches;
+    private final RoundMatches roundMatches;
     private final RoundResultRepository results;
     private final FriendGroupRepository groups;
     private final GroupMemberRepository members;
@@ -50,13 +49,13 @@ public class RoundFinalizer {
     private final TransactionTemplate tx;
     private final ScoreDecisionService decisionService;
 
-    public RoundFinalizer(PredictionRepository predictions, MatchRepository matches,
+    public RoundFinalizer(PredictionRepository predictions, RoundMatches roundMatches,
                           RoundResultRepository results, FriendGroupRepository groups,
                           GroupMemberRepository members, RulesService rulesService, AppTime time,
                           PlatformTransactionManager transactionManager,
                           ScoreDecisionService decisionService) {
         this.predictions = predictions;
-        this.matches = matches;
+        this.roundMatches = roundMatches;
         this.results = results;
         this.groups = groups;
         this.members = members;
@@ -96,7 +95,8 @@ public class RoundFinalizer {
         if (group == null) {
             return false;
         }
-        List<FootballMatch> weekMatches = matches.findByRoundWeekOrderByKickoffAtAscIdAsc(week);
+        // тур состоит только из матчей, отобранных владельцем группы
+        List<FootballMatch> weekMatches = roundMatches.forRound(groupId, week);
         if (weekMatches.isEmpty()) {
             return false;
         }

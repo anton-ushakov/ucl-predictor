@@ -16,7 +16,6 @@ import com.example.predictor.group.RulesService;
 import com.example.predictor.group.RulesService.Rules;
 import com.example.predictor.repository.AppUserRepository;
 import com.example.predictor.repository.GroupMemberRepository;
-import com.example.predictor.repository.MatchRepository;
 import com.example.predictor.repository.PredictionRepository;
 import com.example.predictor.repository.RoundResultRepository;
 import com.example.predictor.round.RoundDtos.*;
@@ -61,21 +60,21 @@ public class RoundService {
 
     private final GroupAccess access;
     private final RulesService rulesService;
-    private final MatchRepository matches;
     private final PredictionRepository predictions;
     private final RoundResultRepository results;
     private final GroupMemberRepository members;
     private final AppUserRepository users;
     private final AppTime time;
     private final ScoreDecisionService decisionService;
+    private final RoundMatches roundMatches;
 
-    public RoundService(GroupAccess access, RulesService rulesService, MatchRepository matches,
+    public RoundService(GroupAccess access, RulesService rulesService,
                         PredictionRepository predictions, RoundResultRepository results,
                         GroupMemberRepository members, AppUserRepository users, AppTime time,
-                        ScoreDecisionService decisionService) {
+                        ScoreDecisionService decisionService, RoundMatches roundMatches) {
+        this.roundMatches = roundMatches;
         this.access = access;
         this.rulesService = rulesService;
-        this.matches = matches;
         this.predictions = predictions;
         this.results = results;
         this.members = members;
@@ -93,10 +92,8 @@ public class RoundService {
         LocalDate from = time.currentWeek().minusWeeks(HISTORY_WEEKS_BACK);
         LocalDate to = time.lastPredictableWeek();
 
-        Map<LocalDate, List<FootballMatch>> byWeek = new LinkedHashMap<>();
-        for (FootballMatch m : matches.findByRoundWeekBetweenOrderByKickoffAtAscIdAsc(from, to)) {
-            byWeek.computeIfAbsent(m.getRoundWeek(), k -> new ArrayList<>()).add(m);
-        }
+        // в тур входят только матчи, отобранные владельцем группы
+        Map<LocalDate, List<FootballMatch>> byWeek = roundMatches.forRange(groupId, from, to);
         Set<Long> mine = new HashSet<>(predictions.findMatchIdsOfUser(groupId, user.getId(), from, to));
         Set<LocalDate> weeksWithPredictions =
                 new HashSet<>(predictions.findWeeksWithPredictions(groupId, from, to));
@@ -131,7 +128,16 @@ public class RoundService {
             list.add(new RoundSummary(week,
                     RoundStatus.of(finalized.contains(week), started, allOver,
                             weeksWithPredictions.contains(week)),
-                    e.getValue().size(), predicted, open, e.getValue().get(0).getKickoffAt()));
+                    e.getValue().size(), predicted, open, e.getValue().get(0).getKickoffAt(),
+                    !week.isBefore(time.currentWeek()) && !week.isAfter(to)));
+        }
+
+        // Текущая и следующая недели показываются всегда, даже если владелец ещё не выбрал матчи:
+        // иначе ему некуда нажать, чтобы их выбрать.
+        for (LocalDate week = time.currentWeek(); !week.isAfter(to); week = week.plusWeeks(1)) {
+            if (!byWeek.containsKey(week)) {
+                list.add(new RoundSummary(week, RoundStatus.UPCOMING, 0, 0, 0, null, true));
+            }
         }
         list.sort(Comparator.comparing(RoundSummary::week).reversed());
         return list;
@@ -145,9 +151,10 @@ public class RoundService {
         FriendGroup group = ms.group();
         requireMonday(week);
 
-        List<FootballMatch> weekMatches = matches.findByRoundWeekOrderByKickoffAtAscIdAsc(week);
+        List<FootballMatch> weekMatches = roundMatches.forRound(groupId, week);
         if (weekMatches.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "В этом туре нет матчей");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "В этом туре пока нет матчей: владелец группы ещё не выбрал их");
         }
 
         Rules rules = rulesService.rulesFor(group, week);
@@ -344,9 +351,10 @@ public class RoundService {
                     "Приём прогнозов на этот тур ещё не открыт: можно прогнозировать текущую и следующую неделю");
         }
 
-        List<FootballMatch> weekMatches = matches.findByRoundWeekOrderByKickoffAtAscIdAsc(week);
+        List<FootballMatch> weekMatches = roundMatches.forRound(groupId, week);
         if (weekMatches.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "В этом туре нет матчей");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
+                    "В этом туре пока нет матчей: владелец группы ещё не выбрал их");
         }
 
         // Фиксация правил и сохранение идут в одной транзакции: если проверка ниже не пройдёт,

@@ -64,8 +64,14 @@ public class FriendGroup {
     @Column(name = "outcome_points", nullable = false)
     private int outcomePoints = Scoring.DEFAULT.outcomePoints();
 
+    /** Показывать русские названия команд, если они есть в словаре. */
+    @Column(name = "use_russian_names", nullable = false)
+    private boolean useRussianNames = true;
+
     public void changeSettings(int lockMinutesBefore, List<Tiebreaker> tiebreakerList, RevealMode revealMode,
-                               ScoreBasis scoreBasis, SubmissionMode submissionMode, Scoring scoring) {
+                               ScoreBasis scoreBasis, SubmissionMode submissionMode, Scoring scoring,
+                               boolean useRussianNames) {
+        this.useRussianNames = useRussianNames;
         this.submissionMode = submissionMode;
         this.exactScorePoints = scoring.exactScorePoints();
         this.goalDiffPoints = scoring.goalDiffPoints();
@@ -104,4 +110,5 @@ public class FriendGroup {
     public int getLockMinutesBefore() { return lockMinutesBefore; }
     public String getTiebreakers() { return tiebreakers; }
     public RevealMode getRevealMode() { return revealMode; }
+    public boolean isUseRussianNames() { return useRussianNames; }
 }

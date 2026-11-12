@@ -40,7 +40,8 @@ public class GroupController {
             SubmissionMode submissionMode,
             @Min(0) @Max(100) Integer exactScorePoints,
             @Min(0) @Max(100) Integer goalDiffPoints,
-            @Min(0) @Max(100) Integer outcomePoints) {
+            @Min(0) @Max(100) Integer outcomePoints,
+            Boolean useRussianNames) {
     }
 
     private final AuthService auth;
@@ -95,8 +96,11 @@ public class GroupController {
                         : request.goalDiffPoints(),
                 request.outcomePoints() == null ? Scoring.DEFAULT.outcomePoints()
                         : request.outcomePoints());
+        // по умолчанию русские названия включены: так понятнее большинству участников
+        boolean useRussianNames = request.useRussianNames() == null || request.useRussianNames();
         return groups.updateSettings(user, groupId, request.lockMinutesBefore(),
-                request.tiebreakers(), request.revealMode(), scoreBasis, submissionMode, scoring);
+                request.tiebreakers(), request.revealMode(), scoreBasis, submissionMode, scoring,
+                useRussianNames);
     }
 
     /** Сброс пароля участнику (только владелец). Временный пароль показывается один раз. */

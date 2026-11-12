@@ -13,6 +13,8 @@ import com.example.predictor.domain.RoundResult;
 import com.example.predictor.domain.ScoreBasis;
 import com.example.predictor.group.RulesService;
 import com.example.predictor.group.RulesService.Rules;
+import com.example.predictor.names.TeamNameMap;
+import com.example.predictor.names.TeamNamesService;
 import com.example.predictor.notify.NotificationTexts.Text;
 import com.example.predictor.repository.FriendGroupRepository;
 import com.example.predictor.repository.GroupMemberRepository;
@@ -60,6 +62,7 @@ public class NotificationGenerator {
     private final FriendGroupRepository groups;
     private final GroupMemberRepository members;
     private final com.example.predictor.round.RoundMatches roundMatches;
+    private final TeamNamesService teamNames;
     private final PredictionRepository predictions;
     private final RoundResultRepository results;
     private final NotificationRepository notifications;
@@ -69,6 +72,7 @@ public class NotificationGenerator {
 
     public NotificationGenerator(FriendGroupRepository groups, GroupMemberRepository members,
                                  com.example.predictor.round.RoundMatches roundMatches,
+                                 TeamNamesService teamNames,
                                  PredictionRepository predictions,
                                  RoundResultRepository results, NotificationRepository notifications,
                                  NotificationSettingsRepository settings, RulesService rulesService,
@@ -76,6 +80,7 @@ public class NotificationGenerator {
         this.groups = groups;
         this.members = members;
         this.roundMatches = roundMatches;
+        this.teamNames = teamNames;
         this.predictions = predictions;
         this.results = results;
         this.notifications = notifications;
@@ -181,6 +186,7 @@ public class NotificationGenerator {
         LocalDate to = time.currentWeek();
         Instant freshSince = now.minus(FRESH);
 
+        TeamNameMap teamLabels = teamNames.mapFor(group);
         Map<LocalDate, List<Prediction>> byWeek = new HashMap<>();
         for (FootballMatch m : roundMatches.forRangeFlat(group.getId(), from, to)) {
             if (!m.isFinished() || m.getKickoffAt().isBefore(freshSince)) {
@@ -214,8 +220,9 @@ public class NotificationGenerator {
                 Integer points = p == null ? null
                         : rules.scoring().points(p.getHomeGoals(), p.getAwayGoals(),
                                 homeScore, awayScore);
-                Text text = NotificationTexts.matchFinished(group.getName(), m.getHomeTeam(),
-                        m.getAwayTeam(), homeScore, awayScore, guess, points);
+                Text text = NotificationTexts.matchFinished(group.getName(),
+                        teamLabels.display(m.getHomeTeam()), teamLabels.display(m.getAwayTeam()),
+                        homeScore, awayScore, guess, points);
                 out.add(new Notification(userId, group.getId(), NotificationType.MATCH_FINISHED, key,
                         text.title(), text.body(), m.getRoundWeek(), now));
             }

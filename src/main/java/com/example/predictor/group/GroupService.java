@@ -45,7 +45,7 @@ public class GroupService {
                               boolean countExtraTime, boolean countPenalties,
                               SubmissionMode submissionMode,
                               int exactScorePoints, int goalDiffPoints, int outcomePoints,
-                              String scoringDescription) {
+                              String scoringDescription, boolean useRussianNames) {
     }
 
     /**
@@ -139,7 +139,7 @@ public class GroupService {
                 g.tiebreakerList().stream().map(Enum::name).toList(), g.getRevealMode(),
                 g.scoreBasis().extraTime(), g.scoreBasis().penalties(), g.getSubmissionMode(),
                 g.scoring().exactScorePoints(), g.scoring().goalDiffPoints(),
-                g.scoring().outcomePoints(), g.scoring().describe());
+                g.scoring().outcomePoints(), g.scoring().describe(), g.isUseRussianNames());
         List<OptionDto> tiebreakerOptions = Arrays.stream(Tiebreaker.values())
                 .map(t -> new OptionDto(t.name(), t.getDescription())).toList();
         List<OptionDto> revealOptions = Arrays.stream(RevealMode.values())
@@ -155,7 +155,7 @@ public class GroupService {
     public SettingsDto updateSettings(AppUser current, Long groupId, int lockMinutesBefore,
                                       List<String> tiebreakerNames, RevealMode revealMode,
                                       ScoreBasis scoreBasis, SubmissionMode submissionMode,
-                                      Scoring scoring) {
+                                      Scoring scoring, boolean useRussianNames) {
         Membership ms = access.requireOwner(current, groupId);
         FriendGroup group = ms.group();
 
@@ -178,12 +178,12 @@ public class GroupService {
         }
 
         group.changeSettings(lockMinutesBefore, tiebreakers, revealMode, scoreBasis, submissionMode,
-                scoring);
+                scoring, useRussianNames);
         groups.save(group);
         return new SettingsDto(lockMinutesBefore, tiebreakers.stream().map(Enum::name).toList(), revealMode,
                 scoreBasis.extraTime(), scoreBasis.penalties(), submissionMode,
                 scoring.exactScorePoints(), scoring.goalDiffPoints(), scoring.outcomePoints(),
-                scoring.describe());
+                scoring.describe(), useRussianNames);
     }
 
     /**

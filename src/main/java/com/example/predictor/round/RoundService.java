@@ -14,6 +14,8 @@ import com.example.predictor.group.GroupAccess;
 import com.example.predictor.group.GroupAccess.Membership;
 import com.example.predictor.group.RulesService;
 import com.example.predictor.group.RulesService.Rules;
+import com.example.predictor.names.TeamNameMap;
+import com.example.predictor.names.TeamNamesService;
 import com.example.predictor.repository.AppUserRepository;
 import com.example.predictor.repository.GroupMemberRepository;
 import com.example.predictor.repository.PredictionRepository;
@@ -67,11 +69,14 @@ public class RoundService {
     private final AppTime time;
     private final ScoreDecisionService decisionService;
     private final RoundMatches roundMatches;
+    private final TeamNamesService teamNames;
 
     public RoundService(GroupAccess access, RulesService rulesService,
                         PredictionRepository predictions, RoundResultRepository results,
                         GroupMemberRepository members, AppUserRepository users, AppTime time,
-                        ScoreDecisionService decisionService, RoundMatches roundMatches) {
+                        ScoreDecisionService decisionService, RoundMatches roundMatches,
+                        TeamNamesService teamNames) {
+        this.teamNames = teamNames;
         this.roundMatches = roundMatches;
         this.access = access;
         this.rulesService = rulesService;
@@ -159,6 +164,7 @@ public class RoundService {
 
         Rules rules = rulesService.rulesFor(group, week);
         boolean frozen = rulesService.isFrozen(groupId, week);
+        TeamNameMap teamLabels = teamNames.mapFor(group);
         List<GroupMember> memberList = members.findAllWithUser(groupId);
         Map<Long, String> names = new HashMap<>();
         for (GroupMember gm : memberList) {
@@ -232,7 +238,8 @@ public class RoundService {
                 decisionsForMe++;
             }
             boolean counted = info.kind().counted();
-            views.add(new MatchView(m.getId(), m.getHomeTeam(), m.getAwayTeam(), m.getKickoffAt(), lockAt,
+            views.add(new MatchView(m.getId(), teamLabels.display(m.getHomeTeam()),
+                    teamLabels.display(m.getAwayTeam()), m.getKickoffAt(), lockAt,
                     m.getStage(), m.getMatchday(), m.getStatus(),
                     counted ? m.scoreHome(info.basis()) : null, counted ? m.scoreAway(info.basis()) : null,
                     detail, info.kind().name(), decision, isOpen, locked, forMatch.size(), memberList.size(), myView, visible, others));
@@ -371,11 +378,13 @@ public class RoundService {
         }
 
         Instant now = Instant.now();
+        TeamNameMap teamLabels = teamNames.mapFor(group);
         List<SubmissionValidator.MatchState> states = new ArrayList<>();
         Map<Long, FootballMatch> byId = new HashMap<>();
         for (FootballMatch m : weekMatches) {
             byId.put(m.getId(), m);
-            states.add(new SubmissionValidator.MatchState(m.getId(), m.getHomeTeam() + " — " + m.getAwayTeam(),
+            states.add(new SubmissionValidator.MatchState(m.getId(),
+                    teamLabels.display(m.getHomeTeam()) + " — " + teamLabels.display(m.getAwayTeam()),
                     m.getStatus(), rules.lockAt(m.getKickoffAt()), mineIds.contains(m.getId()),
                     m.getKickoffAt().atZone(time.zone()).toLocalDate()));
         }

@@ -17,15 +17,25 @@ public final class SelectionRules {
     private SelectionRules() {
     }
 
+    /** Относится ли матч к неделе, на которую ещё принимаются прогнозы. */
+    public static Problem checkWeek(String title, LocalDate matchWeek, LocalDate firstWeek,
+                                    LocalDate lastWeek) {
+        if (matchWeek.isBefore(firstWeek) || matchWeek.isAfter(lastWeek)) {
+            return new Problem(409, "В тур можно добавлять матчи текущей и следующей недели, а матч "
+                    + title + " относится к туру " + matchWeek);
+        }
+        return null;
+    }
+
     /**
      * Можно ли добавить матч в тур: он должен относиться к неделе, на которую ещё принимаются
      * прогнозы, и приём прогнозов на сам матч не должен быть закрыт.
      */
     public static Problem canAdd(String title, LocalDate matchWeek, LocalDate firstWeek,
                                  LocalDate lastWeek, boolean locked) {
-        if (matchWeek.isBefore(firstWeek) || matchWeek.isAfter(lastWeek)) {
-            return new Problem(409, "В тур можно добавлять матчи текущей и следующей недели, а матч "
-                    + title + " относится к туру " + matchWeek);
+        Problem week = checkWeek(title, matchWeek, firstWeek, lastWeek);
+        if (week != null) {
+            return week;
         }
         if (locked) {
             return new Problem(409, "Приём прогнозов на матч " + title

@@ -10,6 +10,8 @@ import com.example.predictor.group.GroupAccess;
 import com.example.predictor.group.GroupAccess.Membership;
 import com.example.predictor.group.RulesService;
 import com.example.predictor.group.RulesService.Rules;
+import com.example.predictor.names.TeamNameMap;
+import com.example.predictor.names.TeamNamesService;
 import com.example.predictor.repository.CompetitionRepository;
 import com.example.predictor.repository.MatchRepository;
 import com.example.predictor.repository.PredictionRepository;
@@ -43,11 +45,13 @@ public class MatchSelectionService {
     private final RoundMatchRepository selection;
     private final PredictionRepository predictions;
     private final AppTime time;
+    private final TeamNamesService teamNames;
 
     public MatchSelectionService(GroupAccess access, RulesService rulesService,
                                  CompetitionRepository competitions, MatchRepository matches,
                                  RoundMatchRepository selection, PredictionRepository predictions,
-                                 AppTime time) {
+                                 AppTime time, TeamNamesService teamNames) {
+        this.teamNames = teamNames;
         this.access = access;
         this.rulesService = rulesService;
         this.competitions = competitions;
@@ -103,11 +107,13 @@ public class MatchSelectionService {
                 : new HashSet<>(predictions.findPredictedMatchIds(groupId, ids(list)));
 
         Rules rules = rulesService.rulesFor(group, week);
+        TeamNameMap names = teamNames.mapFor(group);
         Instant now = Instant.now();
         List<SelectableMatch> views = new ArrayList<>();
         for (FootballMatch m : list) {
             Instant lockAt = rules.lockAt(m.getKickoffAt());
-            views.add(new SelectableMatch(m.getId(), m.getHomeTeam(), m.getAwayTeam(), m.getKickoffAt(),
+            views.add(new SelectableMatch(m.getId(), names.display(m.getHomeTeam()),
+                    names.display(m.getAwayTeam()), m.getKickoffAt(),
                     lockAt, m.getStage(), m.getMatchday(), m.getStatus(), m.isManual(),
                     selectedIds.contains(m.getId()),
                     RevealPolicy.locked(now, lockAt, m.getStatus()),
@@ -132,9 +138,11 @@ public class MatchSelectionService {
         requireOwner(ms);
         LocalDate last = time.lastPredictableWeek();
         LocalDate first = time.currentWeek();
+        TeamNameMap teamLabels = teamNames.mapFor(ms.group());
         Instant now = Instant.now();
 
         int added = 0;
+        int lockedSkipped = 0;
         LocalDate week = null;
         for (Long matchId : new ArrayList<>(new java.util.LinkedHashSet<>(matchIds))) {
             FootballMatch m = matches.findById(matchId)
@@ -143,18 +151,32 @@ public class MatchSelectionService {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Матч не найден");
             }
             week = m.getRoundWeek();
+            String title = teamLabels.display(m.getHomeTeam()) + " — "
+                    + teamLabels.display(m.getAwayTeam());
+            fail(SelectionRules.checkWeek(title, week, first, last));
             Rules rules = rulesService.rulesFor(ms.group(), week);
-            boolean locked = RevealPolicy.locked(now, rules.lockAt(m.getKickoffAt()), m.getStatus());
-            fail(SelectionRules.canAdd(m.getHomeTeam() + " — " + m.getAwayTeam(), week, first, last, locked));
+            if (RevealPolicy.locked(now, rules.lockAt(m.getKickoffAt()), m.getStatus())) {
+                // «Выбрать все» может задеть матч, приём на который только что закрылся:
+                // пропускаем его, а остальные добавляем
+                lockedSkipped++;
+                continue;
+            }
             if (selection.findByGroupIdAndMatchId(groupId, matchId).isPresent()) {
                 continue; // уже в туре
             }
             selection.save(new RoundMatch(groupId, week, matchId, user.getId(), now));
             added++;
         }
+        if (added == 0 && lockedSkipped > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Приём прогнозов на эти матчи уже закрыт, добавить их в тур нельзя");
+        }
         int total = week == null ? 0 : selection.findByGroupIdAndRoundWeek(groupId, week).size();
-        return new SelectionResult(total, added,
-                added == 0 ? "Эти матчи уже в туре" : "Матчей добавлено в тур: " + added);
+        String message = added == 0
+                ? "Эти матчи уже в туре"
+                : "Матчей добавлено в тур: " + added
+                  + (lockedSkipped > 0 ? ". Пропущено, приём уже закрыт: " + lockedSkipped : "");
+        return new SelectionResult(total, added, message);
     }
 
     /** Убирает матч из тура. Если на него уже есть прогнозы, убрать нельзя. */

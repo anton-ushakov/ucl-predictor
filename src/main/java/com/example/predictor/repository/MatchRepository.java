@@ -20,6 +20,16 @@ public interface MatchRepository extends JpaRepository<FootballMatch, Long> {
     @Query("select distinct m.roundWeek from FootballMatch m order by m.roundWeek")
     List<LocalDate> findAllRoundWeeks();
 
+    /** Оригинальные названия команд-хозяев во всех матчах, доступных группе. */
+    @Query("select distinct m.homeTeam from FootballMatch m "
+            + "where m.ownerGroupId is null or m.ownerGroupId = :groupId")
+    List<String> findHomeTeamNames(@Param("groupId") Long groupId);
+
+    /** То же для команд-гостей. */
+    @Query("select distinct m.awayTeam from FootballMatch m "
+            + "where m.ownerGroupId is null or m.ownerGroupId = :groupId")
+    List<String> findAwayTeamNames(@Param("groupId") Long groupId);
+
     /**
      * Матчи турнира за промежуток недель, которые можно предложить группе: загруженные из
      * football-data.org (ownerGroupId пуст) и ручные матчи самой этой группы.

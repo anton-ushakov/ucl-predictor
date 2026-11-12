@@ -1,0 +1,71 @@
+# ============================================================
+# Домашний вариант: сервер работает на ноутбуке в вашей сети.
+#
+# Отличия от docker-compose.yml (он для арендованного сервера):
+#   - нет Caddy: сертификат HTTPS в домашней сети получить не на что
+#   - порт приложения открыт наружу, чтобы телефоны видели его по Wi-Fi
+#   - добавлен cloudflared: он даёт доступ из интернета и HTTPS, когда понадобится
+#
+# Запуск только для домашней сети:
+#     docker compose -f docker-compose.home.yml up -d --build
+#
+# Запуск вместе с туннелем в интернет:
+#     docker compose -f docker-compose.home.yml --profile tunnel up -d --build
+# ============================================================
+
+services:
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    mem_limit: 512m
+    command: >
+      postgres
+      -c shared_buffers=128MB
+      -c max_connections=40
+    environment:
+      POSTGRES_DB: ucl_predictor
+      POSTGRES_USER: predictor
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?задайте DB_PASSWORD в файле .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U predictor -d ucl_predictor"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    mem_limit: 1g
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/ucl_predictor
+      SPRING_DATASOURCE_USERNAME: predictor
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SERVER_PORT: 8080
+      FOOTBALL_DATA_TOKEN: ${FOOTBALL_DATA_TOKEN:?задайте FOOTBALL_DATA_TOKEN в файле .env}
+      APP_PREDICTIONS_WEEKS_AHEAD: ${WEEKS_AHEAD:-4}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Moscow}
+      TZ: ${APP_TIMEZONE:-Europe/Moscow}
+      # Памяти дома много, поэтому Java можно не ужимать
+      JAVA_OPTS: "-Xmx768m -XX:MaxMetaspaceSize=256m"
+    ports:
+      # Доступ по домашней сети: http://адрес-ноутбука:8080
+      - "8080:8080"
+
+  # Появляется только с ключом --profile tunnel
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    depends_on:
+      - app
+    command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN:?задайте TUNNEL_TOKEN в файле .env}
+
+volumes:
+  db-data:

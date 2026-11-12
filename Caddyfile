@@ -1,0 +1,7 @@
+# Caddy сам получает сертификат Let's Encrypt и продлевает его.
+# Адрес берётся из переменной SERVER_NAME в файле .env.
+
+{$SERVER_NAME} {
+	encode gzip
+	reverse_proxy app:8080
+}

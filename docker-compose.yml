@@ -1,0 +1,75 @@
+# ============================================================
+# Три части: база данных, приложение и Caddy (он выдаёт HTTPS).
+# Память распределена под сервер с 2 ГБ: база 384 МБ, приложение 700 МБ, Caddy 96 МБ.
+# Остальное остаётся системе. На машине побольше ограничения можно поднять или убрать.
+# Запуск:  docker compose up -d
+# Логи:    docker compose logs -f app
+# ============================================================
+
+services:
+
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    mem_limit: 384m
+    # Настройки под маленький сервер: по умолчанию PostgreSQL рассчитывает на больший объём
+    command: >
+      postgres
+      -c shared_buffers=96MB
+      -c max_connections=30
+      -c work_mem=4MB
+      -c maintenance_work_mem=48MB
+    environment:
+      POSTGRES_DB: ucl_predictor
+      POSTGRES_USER: predictor
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?задайте DB_PASSWORD в файле .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U predictor -d ucl_predictor"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Наружу порт не открываем: база видна только приложению
+
+  app:
+    build: .
+    restart: unless-stopped
+    mem_limit: 700m
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Эти три строки заменяют настройки из application.properties
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/ucl_predictor
+      SPRING_DATASOURCE_USERNAME: predictor
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SERVER_PORT: 8080
+      FOOTBALL_DATA_TOKEN: ${FOOTBALL_DATA_TOKEN:?задайте FOOTBALL_DATA_TOKEN в файле .env}
+      APP_PREDICTIONS_WEEKS_AHEAD: ${WEEKS_AHEAD:-4}
+      # Часовой пояс, по которому считаются недели туров и время закрытия приёма
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Moscow}
+      TZ: ${APP_TIMEZONE:-Europe/Moscow}
+    # Наружу порт не открываем: снаружи с приложением говорит только Caddy
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    mem_limit: 96m
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SERVER_NAME: ${SERVER_NAME:?задайте SERVER_NAME в файле .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

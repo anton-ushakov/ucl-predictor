@@ -21,6 +21,8 @@ import com.example.predictor.repository.GroupMemberRepository;
 import com.example.predictor.repository.NotificationRepository;
 import com.example.predictor.repository.NotificationSettingsRepository;
 import com.example.predictor.repository.PredictionRepository;
+import com.example.predictor.domain.RoundMessage;
+import com.example.predictor.repository.RoundMessageRepository;
 import com.example.predictor.repository.RoundResultRepository;
 import com.example.predictor.scoring.Scoring;
 import org.slf4j.Logger;
@@ -68,6 +70,7 @@ public class NotificationGenerator {
     private final NotificationRepository notifications;
     private final NotificationSettingsRepository settings;
     private final RulesService rulesService;
+    private final RoundMessageRepository roundMessages;
     private final AppTime time;
 
     public NotificationGenerator(FriendGroupRepository groups, GroupMemberRepository members,
@@ -76,6 +79,7 @@ public class NotificationGenerator {
                                  PredictionRepository predictions,
                                  RoundResultRepository results, NotificationRepository notifications,
                                  NotificationSettingsRepository settings, RulesService rulesService,
+                                 RoundMessageRepository roundMessages,
                                  AppTime time) {
         this.groups = groups;
         this.members = members;
@@ -86,6 +90,7 @@ public class NotificationGenerator {
         this.notifications = notifications;
         this.settings = settings;
         this.rulesService = rulesService;
+        this.roundMessages = roundMessages;
         this.time = time;
     }
 
@@ -109,6 +114,7 @@ public class NotificationGenerator {
                 matchResults(group, memberList, wants, now, created);
                 daySummaries(group, memberList, wants, now, created);
                 roundSummaries(group, memberList, wants, now, created);
+                discussions(group, memberList, wants, now, created);
             } catch (RuntimeException e) {
                 log.warn("Не удалось подготовить оповещения для группы {}: {}",
                         group.getId(), e.getMessage());
@@ -397,4 +403,62 @@ public class NotificationGenerator {
         }
         return fresh;
     }
+    // ------------------------------------------------------------------ обсуждение тура
+
+    /** Насколько свежими считаем сообщения в обсуждении. */
+    private static final Duration DISCUSSION_WINDOW = Duration.ofHours(2);
+
+    /**
+     * Одно оповещение на тур за час, а не на каждую реплику. Тому, кто сам только что писал,
+     * про свои же сообщения не рассказываем.
+     */
+    private void discussions(FriendGroup group, List<GroupMember> memberList,
+                             Map<Long, NotificationSettings> wants, Instant now,
+                             List<Notification> out) {
+        List<RoundMessage> fresh =
+                roundMessages.findFresh(group.getId(), now.minus(DISCUSSION_WINDOW));
+        if (fresh.isEmpty()) {
+            return;
+        }
+        Map<LocalDate, List<RoundMessage>> byWeek = new LinkedHashMap<>();
+        for (RoundMessage m : fresh) {
+            byWeek.computeIfAbsent(m.getRoundWeek(), k -> new ArrayList<>()).add(m);
+        }
+
+        Map<Long, String> names = new HashMap<>();
+        for (GroupMember gm : memberList) {
+            names.put(gm.getUser().getId(), gm.getUser().getUsername());
+        }
+
+        for (Map.Entry<LocalDate, List<RoundMessage>> e : byWeek.entrySet()) {
+            LocalDate week = e.getKey();
+            List<RoundMessage> list = e.getValue();
+            RoundMessage last = list.get(list.size() - 1);
+            // час последнего сообщения: внутри часа оповещение остаётся одним и тем же
+            long bucket = last.getCreatedAt().getEpochSecond() / 3600;
+            String key = "discussion:" + group.getId() + ":" + week + ":" + bucket;
+
+            for (GroupMember gm : memberList) {
+                Long userId = gm.getUser().getId();
+                NotificationSettings prefs = wants.get(userId);
+                if (prefs != null && !prefs.wants(NotificationType.DISCUSSION)) {
+                    continue;
+                }
+                int forHim = 0;
+                for (RoundMessage m : list) {
+                    if (!m.getUserId().equals(userId)) {
+                        forHim++;
+                    }
+                }
+                if (forHim == 0) {
+                    continue; // писал только он сам
+                }
+                Text text = NotificationTexts.discussion(group.getName(), week, forHim,
+                        names.get(last.getUserId()), last.getText());
+                out.add(new Notification(userId, group.getId(), NotificationType.DISCUSSION, key,
+                        text.title(), text.body(), week, now));
+            }
+        }
+    }
+
 }

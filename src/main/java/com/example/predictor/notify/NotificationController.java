@@ -18,9 +18,11 @@ public class NotificationController {
     public record ReadRequest(List<Long> ids) {
     }
 
+    /** discussion может отсутствовать: старое приложение это поле не присылает. */
     public record UpdateSettingsRequest(@NotNull Boolean lockSoon,
                                         @NotNull Boolean matchFinished,
-                                        @NotNull Boolean summary) {
+                                        @NotNull Boolean summary,
+                                        Boolean discussion) {
     }
 
     private final AuthService auth;
@@ -60,7 +62,9 @@ public class NotificationController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody UpdateSettingsRequest request) {
         AppUser user = auth.authenticate(authorization);
+        // старое приложение это поле не присылает: считаем обсуждение включённым
+        boolean discussion = request.discussion() == null || request.discussion();
         return notifications.updateSettings(user, request.lockSoon(), request.matchFinished(),
-                request.summary());
+                request.summary(), discussion);
     }
 }

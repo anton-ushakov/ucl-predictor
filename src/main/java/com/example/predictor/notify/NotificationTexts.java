@@ -99,4 +99,34 @@ public final class NotificationTexts {
         }
         return "баллов";
     }
+    /**
+     * Новые сообщения в обсуждении тура. Одно оповещение на пачку: писать о каждой реплике
+     * значит превратить телефон в барабан.
+     */
+    public static Text discussion(String groupName, LocalDate week, int count, String lastAuthor,
+                                  String lastText) {
+        String title = "Обсуждение тура " + week.format(DAY);
+        StringBuilder body = new StringBuilder(groupName).append(": ")
+                .append(count).append(" ").append(messageWord(count));
+        if (lastAuthor != null && lastText != null) {
+            body.append(". ").append(lastAuthor).append(": ").append(shorten(lastText, 120));
+        }
+        return new Text(title, body.toString());
+    }
+
+    static String messageWord(int count) {
+        if (count % 10 == 1 && count % 100 != 11) {
+            return "новое сообщение";
+        }
+        if (count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14)) {
+            return "новых сообщения";
+        }
+        return "новых сообщений";
+    }
+
+    private static String shorten(String text, int max) {
+        String one = text.replace('\n', ' ').trim();
+        return one.length() <= max ? one : one.substring(0, max - 1) + "…";
+    }
+
 }

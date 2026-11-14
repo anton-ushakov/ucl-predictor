@@ -30,12 +30,15 @@ public class AnnouncementService {
     private final AdminAccess admin;
     private final AppUserRepository users;
     private final NotificationRepository notifications;
+    private final com.example.predictor.push.PushSender push;
 
     public AnnouncementService(AdminAccess admin, AppUserRepository users,
-                               NotificationRepository notifications) {
+                               NotificationRepository notifications,
+                               com.example.predictor.push.PushSender push) {
         this.admin = admin;
         this.users = users;
         this.notifications = notifications;
+        this.push = push;
     }
 
     @Transactional
@@ -82,6 +85,8 @@ public class AnnouncementService {
                     title, body, null, now));
         }
         notifications.saveAll(fresh);
+        notifications.flush();
+        push.push(fresh);
 
         String message = fresh.isEmpty()
                 ? "Об этой версии уже сообщали всем участникам"

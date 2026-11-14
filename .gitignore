@@ -4,3 +4,4 @@ target/
 .env
 backups/
 *.log
+firebase-service-account.json

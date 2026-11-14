@@ -71,6 +71,7 @@ public class NotificationGenerator {
     private final NotificationSettingsRepository settings;
     private final RulesService rulesService;
     private final RoundMessageRepository roundMessages;
+    private final com.example.predictor.push.PushSender push;
     private final AppTime time;
 
     public NotificationGenerator(FriendGroupRepository groups, GroupMemberRepository members,
@@ -80,6 +81,7 @@ public class NotificationGenerator {
                                  RoundResultRepository results, NotificationRepository notifications,
                                  NotificationSettingsRepository settings, RulesService rulesService,
                                  RoundMessageRepository roundMessages,
+                                 com.example.predictor.push.PushSender push,
                                  AppTime time) {
         this.groups = groups;
         this.members = members;
@@ -91,6 +93,7 @@ public class NotificationGenerator {
         this.settings = settings;
         this.rulesService = rulesService;
         this.roundMessages = roundMessages;
+        this.push = push;
         this.time = time;
     }
 
@@ -123,7 +126,9 @@ public class NotificationGenerator {
         List<Notification> fresh = withoutDuplicates(created);
         if (!fresh.isEmpty()) {
             notifications.saveAll(fresh);
+            notifications.flush();
             log.info("Подготовлено оповещений: {}", fresh.size());
+            push.push(fresh);
         }
         return fresh.size();
     }

@@ -51,7 +51,13 @@ services:
       # Часовой пояс, по которому считаются недели туров и время закрытия приёма
       APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Moscow}
       ADMIN_USERNAMES: ${ADMIN_USERNAMES:-}
+      # Ключ Firebase монтируется только для чтения; без него push выключен
+      FIREBASE_CREDENTIALS: /app/firebase.json
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
       TZ: ${APP_TIMEZONE:-Europe/Moscow}
+    volumes:
+      # Ключ Firebase. Если его нет, подставляется пустышка и push просто выключен.
+      - ${FIREBASE_KEY:-/dev/null}:/app/firebase.json:ro
     # Наружу порт не открываем: снаружи с приложением говорит только Caddy
 
   caddy:

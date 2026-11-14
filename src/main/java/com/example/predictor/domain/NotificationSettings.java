@@ -38,6 +38,8 @@ public class NotificationSettings {
             case LOCK_SOON -> lockSoon;
             case MATCH_FINISHED -> matchFinished;
             case SUMMARY -> summary;
+            // о новой версии сообщаем всегда: выключать это участнику нечего
+            case APP_UPDATE -> true;
         };
     }
 

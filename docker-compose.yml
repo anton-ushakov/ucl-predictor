@@ -50,6 +50,7 @@ services:
       APP_PREDICTIONS_WEEKS_AHEAD: ${WEEKS_AHEAD:-4}
       # Часовой пояс, по которому считаются недели туров и время закрытия приёма
       APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Moscow}
+      ADMIN_USERNAMES: ${ADMIN_USERNAMES:-}
       TZ: ${APP_TIMEZONE:-Europe/Moscow}
     # Наружу порт не открываем: снаружи с приложением говорит только Caddy
 

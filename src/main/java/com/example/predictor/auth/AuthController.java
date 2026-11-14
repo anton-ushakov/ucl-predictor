@@ -31,8 +31,9 @@ public class AuthController {
     public record LoginRequest(@NotBlank String username, @NotBlank String password) {
     }
 
+    /** admin=true: владелец приложения, он может рассылать объявления всем участникам. */
     public record MeResponse(Long id, String username, boolean mustChangePassword,
-                             boolean mustSetPin) {
+                             boolean mustSetPin, boolean admin) {
     }
 
     public record ChangePasswordRequest(@NotBlank String currentPassword,
@@ -65,10 +66,13 @@ public class AuthController {
 
     private final AuthService auth;
     private final AuthModeConfig authMode;
+    private final com.example.predictor.common.AdminAccess adminAccess;
 
-    public AuthController(AuthService auth, AuthModeConfig authMode) {
+    public AuthController(AuthService auth, AuthModeConfig authMode,
+                          com.example.predictor.common.AdminAccess adminAccess) {
         this.authMode = authMode;
         this.auth = auth;
+        this.adminAccess = adminAccess;
     }
 
     @PostMapping("/auth/register")
@@ -123,7 +127,7 @@ public class AuthController {
     public MeResponse me(@RequestHeader(value = "Authorization", required = false) String authorization) {
         AppUser user = auth.authenticate(authorization);
         return new MeResponse(user.getId(), user.getUsername(), user.isMustChangePassword(),
-                user.isMustSetPin());
+                user.isMustSetPin(), adminAccess.isAdmin(user));
     }
 
     /** Смена пароля тем, кто помнит текущий. В ответе новый токен: старые входы отзываются. */

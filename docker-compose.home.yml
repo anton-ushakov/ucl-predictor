@@ -51,6 +51,7 @@ services:
       FOOTBALL_DATA_TOKEN: ${FOOTBALL_DATA_TOKEN:?задайте FOOTBALL_DATA_TOKEN в файле .env}
       APP_PREDICTIONS_WEEKS_AHEAD: ${WEEKS_AHEAD:-4}
       APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Moscow}
+      ADMIN_USERNAMES: ${ADMIN_USERNAMES:-}
       TZ: ${APP_TIMEZONE:-Europe/Moscow}
       # Памяти дома много, поэтому Java можно не ужимать
       JAVA_OPTS: "-Xmx768m -XX:MaxMetaspaceSize=256m"

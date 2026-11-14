@@ -17,7 +17,8 @@ public class Notification {
     @Column(name = "user_id", nullable = false, updatable = false)
     private Long userId;
 
-    @Column(name = "group_id", nullable = false, updatable = false)
+    /** Группа, к которой относится оповещение. У объявлений для всех её нет. */
+    @Column(name = "group_id", updatable = false)
     private Long groupId;
 
     @Enumerated(EnumType.STRING)

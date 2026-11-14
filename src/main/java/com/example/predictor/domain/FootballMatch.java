@@ -31,6 +31,13 @@ public class FootballMatch {
     @Column(name = "created_by")
     private Long createdBy;
 
+    /** Адреса картинок с эмблемами команд. Приходят из источника, у ручных матчей их нет. */
+    @Column(name = "home_crest", length = 300)
+    private String homeCrest;
+
+    @Column(name = "away_crest", length = 300)
+    private String awayCrest;
+
     @Column(name = "home_team", nullable = false, length = 100)
     private String homeTeam;
 
@@ -94,6 +101,13 @@ public class FootballMatch {
         this.createdBy = createdBy;
         this.homeTeam = homeTeam;
         this.awayTeam = awayTeam;
+        // источник иногда отдаёт матч без эмблемы: прежнюю в этом случае не теряем
+        if (homeCrest != null) {
+            this.homeCrest = homeCrest;
+        }
+        if (awayCrest != null) {
+            this.awayCrest = awayCrest;
+        }
         this.kickoffAt = kickoffAt;
         this.roundWeek = roundWeek;
         this.stage = stage;
@@ -114,6 +128,13 @@ public class FootballMatch {
                            String stage) {
         this.homeTeam = homeTeam;
         this.awayTeam = awayTeam;
+        // источник иногда отдаёт матч без эмблемы: прежнюю в этом случае не теряем
+        if (homeCrest != null) {
+            this.homeCrest = homeCrest;
+        }
+        if (awayCrest != null) {
+            this.awayCrest = awayCrest;
+        }
         this.kickoffAt = kickoffAt;
         this.roundWeek = roundWeek;
         this.stage = stage;
@@ -162,13 +183,21 @@ public class FootballMatch {
      * Обновляет матч данными из football-data.org.
      * Счёт сохраняется только для сыгранного матча, иначе очищается.
      */
-    public void applyFeed(String homeTeam, String awayTeam, Instant kickoffAt, LocalDate roundWeek,
+    public void applyFeed(String homeTeam, String awayTeam, String homeCrest, String awayCrest,
+                          Instant kickoffAt, LocalDate roundWeek,
                           String stage, Integer matchday, MatchStatus status,
                           Integer homeScore, Integer awayScore,
                           Integer extraHome, Integer extraAway, Integer penHome, Integer penAway,
                           String duration) {
         this.homeTeam = homeTeam;
         this.awayTeam = awayTeam;
+        // источник иногда отдаёт матч без эмблемы: прежнюю в этом случае не теряем
+        if (homeCrest != null) {
+            this.homeCrest = homeCrest;
+        }
+        if (awayCrest != null) {
+            this.awayCrest = awayCrest;
+        }
         this.kickoffAt = kickoffAt;
         this.roundWeek = roundWeek;
         this.stage = stage;
@@ -259,6 +288,8 @@ public class FootballMatch {
     public Long getId() { return id; }
     public Long getExternalId() { return externalId; }
     public Competition getCompetition() { return competition; }
+    public String getHomeCrest() { return homeCrest; }
+    public String getAwayCrest() { return awayCrest; }
     public Long getOwnerGroupId() { return ownerGroupId; }
     public Long getCreatedBy() { return createdBy; }
     public String getHomeTeam() { return homeTeam; }

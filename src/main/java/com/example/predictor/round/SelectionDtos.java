@@ -30,7 +30,8 @@ public final class SelectionDtos {
      * Матч в списке отбора. selected=true: матч уже в туре группы. hasPredictions=true: на матч
      * уже есть прогнозы, убрать его из тура нельзя.
      */
-    public record SelectableMatch(Long matchId, String homeTeam, String awayTeam, Instant kickoffAt,
+    public record SelectableMatch(Long matchId, String homeTeam, String awayTeam,
+                                  String homeCrest, String awayCrest, Instant kickoffAt,
                                   Instant lockAt, String stage, Integer matchday, MatchStatus status,
                                   boolean manual, boolean selected, boolean locked,
                                   boolean hasPredictions, Integer homeScore, Integer awayScore) {

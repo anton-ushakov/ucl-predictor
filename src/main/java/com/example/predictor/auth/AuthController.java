@@ -9,6 +9,8 @@ import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api")
 public class AuthController {
@@ -33,7 +35,14 @@ public class AuthController {
 
     /** admin=true: владелец приложения, он может рассылать объявления всем участникам. */
     public record MeResponse(Long id, String username, boolean mustChangePassword,
-                             boolean mustSetPin, boolean admin) {
+                             boolean mustSetPin, boolean admin, String badge) {
+    }
+
+    /** Значок перед именем. Пустое значение убирает его. */
+    public record BadgeRequest(@Size(max = 16) String badge) {
+    }
+
+    public record BadgesResponse(List<String> badges, String mine) {
     }
 
     public record ChangePasswordRequest(@NotBlank String currentPassword,
@@ -127,7 +136,24 @@ public class AuthController {
     public MeResponse me(@RequestHeader(value = "Authorization", required = false) String authorization) {
         AppUser user = auth.authenticate(authorization);
         return new MeResponse(user.getId(), user.getUsername(), user.isMustChangePassword(),
-                user.isMustSetPin(), adminAccess.isAdmin(user));
+                user.isMustSetPin(), adminAccess.isAdmin(user), user.getBadge());
+    }
+
+    /** Набор значков, из которых можно выбрать, и текущий выбор участника. */
+    @GetMapping("/badges")
+    public BadgesResponse badges(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        AppUser user = auth.authenticate(authorization);
+        return new BadgesResponse(Badges.ALL, user.getBadge());
+    }
+
+    @PutMapping("/auth/badge")
+    public BadgesResponse setBadge(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @Valid @RequestBody BadgeRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        String saved = auth.setBadge(user, request.badge());
+        return new BadgesResponse(Badges.ALL, saved);
     }
 
     /** Смена пароля тем, кто помнит текущий. В ответе новый токен: старые входы отзываются. */

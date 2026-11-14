@@ -20,8 +20,9 @@ public final class FeedDtos {
                         Team homeTeam, Team awayTeam, Score score) {
     }
 
+    /** crest — адрес картинки с эмблемой клуба или флагом сборной. */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Team(String name, String shortName) {
+    public record Team(String name, String shortName, String crest) {
     }
 
     /**

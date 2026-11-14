@@ -21,8 +21,8 @@ class FeedMapperTest {
     private static FeedDtos.Match match(String status, String duration, FeedDtos.Goals full,
                                         FeedDtos.Goals regular, FeedDtos.Goals extra, FeedDtos.Goals pens) {
         return new FeedDtos.Match(501L, "2026-11-04T20:00:00Z", status, "LEAGUE_STAGE", 4,
-                new FeedDtos.Team("Real Madrid CF", "Real Madrid"),
-                new FeedDtos.Team("Juventus FC", "Juventus"),
+                new FeedDtos.Team("Real Madrid CF", "Real Madrid", null),
+                new FeedDtos.Team("Juventus FC", "Juventus", null),
                 new FeedDtos.Score(duration, full, regular, extra, pens));
     }
 
@@ -129,7 +129,7 @@ class FeedMapperTest {
     void lateSundayInUtcCanBeNextWeekInMoscow() {
         // воскресенье 2026-11-08, 22:30 UTC = понедельник 01:30 по Москве
         FeedDtos.Match raw = new FeedDtos.Match(502L, "2026-11-08T22:30:00Z", "TIMED", "LEAGUE_STAGE", 4,
-                new FeedDtos.Team("A", "A"), new FeedDtos.Team("B", "B"), null);
+                new FeedDtos.Team("A", "A", null), new FeedDtos.Team("B", "B", null), null);
         FeedMapper.Mapped m = FeedMapper.map(raw, MOSCOW).orElseThrow();
         assertEquals(LocalDate.of(2026, 11, 9), m.roundWeek());
     }
@@ -137,22 +137,33 @@ class FeedMapperTest {
     @Test
     void matchWithoutTeamsOrTimeIsSkipped() {
         FeedDtos.Match noTeams = new FeedDtos.Match(503L, "2026-11-04T20:00:00Z", "TIMED", "PLAYOFFS", null,
-                new FeedDtos.Team(null, null), new FeedDtos.Team("B", "B"), null);
+                new FeedDtos.Team(null, null, null), new FeedDtos.Team("B", "B", null), null);
         assertEquals(Optional.empty(), FeedMapper.map(noTeams, MOSCOW));
 
         FeedDtos.Match noTime = new FeedDtos.Match(504L, null, "TIMED", "PLAYOFFS", null,
-                new FeedDtos.Team("A", "A"), new FeedDtos.Team("B", "B"), null);
+                new FeedDtos.Team("A", "A", null), new FeedDtos.Team("B", "B", null), null);
         assertEquals(Optional.empty(), FeedMapper.map(noTime, MOSCOW));
 
         FeedDtos.Match badTime = new FeedDtos.Match(505L, "вчера", "TIMED", "PLAYOFFS", null,
-                new FeedDtos.Team("A", "A"), new FeedDtos.Team("B", "B"), null);
+                new FeedDtos.Team("A", "A", null), new FeedDtos.Team("B", "B", null), null);
         assertEquals(Optional.empty(), FeedMapper.map(badTime, MOSCOW));
     }
 
     @Test
     void shortNameIsPreferredButFullNameIsFallback() {
-        assertEquals("Real Madrid", FeedMapper.teamName(new FeedDtos.Team("Real Madrid CF", "Real Madrid")));
-        assertEquals("Real Madrid CF", FeedMapper.teamName(new FeedDtos.Team("Real Madrid CF", " ")));
+        assertEquals("Real Madrid", FeedMapper.teamName(new FeedDtos.Team("Real Madrid CF", "Real Madrid", null)));
+        assertEquals("Real Madrid CF", FeedMapper.teamName(new FeedDtos.Team("Real Madrid CF", " ", null)));
         assertNull(FeedMapper.teamName(null));
     }
+    @Test
+    void crestIsTakenOnlyOverHttps() {
+        assertEquals("https://crests.football-data.org/86.png",
+                FeedMapper.crest(new FeedDtos.Team("Real Madrid CF", "Real Madrid",
+                        "https://crests.football-data.org/86.png")));
+        // по http картинка на телефоне не покажется, такую не берём
+        assertNull(FeedMapper.crest(new FeedDtos.Team("A", "A", "http://example.com/a.png")));
+        assertNull(FeedMapper.crest(new FeedDtos.Team("A", "A", null)));
+        assertNull(FeedMapper.crest(null));
+    }
+
 }

@@ -4,6 +4,7 @@ import com.example.predictor.domain.AppUser;
 import com.example.predictor.domain.GroupMember;
 import com.example.predictor.domain.RoundResult;
 import com.example.predictor.domain.ScoreBasis;
+import com.example.predictor.common.UserLabel;
 import com.example.predictor.group.GroupAccess;
 import com.example.predictor.repository.GroupMemberRepository;
 import com.example.predictor.repository.RoundResultRepository;
@@ -23,7 +24,8 @@ import java.util.Map;
 @Service
 public class HistoryService {
 
-    public record ResultRow(Long userId, String username, int place, int points, int exactScores,
+    public record ResultRow(Long userId, String username, String badge,
+                            int place, int points, int exactScores,
                             int outcomeHits, int goalDiffHits, int goalError,
                             boolean winner, boolean loser) {
     }
@@ -34,7 +36,8 @@ public class HistoryService {
                                List<ResultRow> rows, List<String> buyers, List<String> receivers) {
     }
 
-    public record LeaderRow(Long userId, String username, int place, int rounds, int totalPoints,
+    public record LeaderRow(Long userId, String username, String badge,
+                            int place, int rounds, int totalPoints,
                             int exactScores, int wins, int losses) {
     }
 
@@ -51,7 +54,7 @@ public class HistoryService {
     @Transactional(readOnly = true)
     public List<HistoryRound> history(AppUser user, Long groupId) {
         access.require(user, groupId);
-        Map<Long, String> names = names(groupId);
+        Map<Long, UserLabel> names = names(groupId);
 
         // репозиторий отдаёт туры от новых к старым, внутри тура по местам
         Map<LocalDate, List<RoundResult>> byWeek = new LinkedHashMap<>();
@@ -65,8 +68,9 @@ public class HistoryService {
             List<String> buyers = new ArrayList<>();
             List<String> receivers = new ArrayList<>();
             for (RoundResult r : e.getValue()) {
-                String name = names.getOrDefault(r.getUserId(), "?");
-                rows.add(new ResultRow(r.getUserId(), name, r.getPlace(), r.getPoints(), r.getExactScores(),
+                UserLabel who = names.getOrDefault(r.getUserId(), UserLabel.UNKNOWN);
+                String name = who.username();
+                rows.add(new ResultRow(r.getUserId(), name, who.badge(), r.getPlace(), r.getPoints(), r.getExactScores(),
                         r.getOutcomeHits(), r.getGoalDiffHits(), r.getGoalError(), r.isWinner(), r.isLoser()));
                 if (r.isLoser()) {
                     buyers.add(name);
@@ -88,7 +92,7 @@ public class HistoryService {
     @Transactional(readOnly = true)
     public List<LeaderRow> leaderboard(AppUser user, Long groupId) {
         access.require(user, groupId);
-        Map<Long, String> names = names(groupId);
+        Map<Long, UserLabel> names = names(groupId);
 
         List<LeaderboardCalculator.ResultLine> lines = new ArrayList<>();
         for (RoundResult r : results.findByGroupIdOrderByRoundWeekDescPlaceAscUserIdAsc(groupId)) {
@@ -97,16 +101,17 @@ public class HistoryService {
         }
         List<LeaderRow> board = new ArrayList<>();
         for (LeaderboardCalculator.Row r : LeaderboardCalculator.calculate(lines)) {
-            board.add(new LeaderRow(r.userId(), names.getOrDefault(r.userId(), "?"), r.place(), r.rounds(),
+            UserLabel who = names.getOrDefault(r.userId(), UserLabel.UNKNOWN);
+            board.add(new LeaderRow(r.userId(), who.username(), who.badge(), r.place(), r.rounds(),
                     r.totalPoints(), r.exactScores(), r.wins(), r.losses()));
         }
         return board;
     }
 
-    private Map<Long, String> names(Long groupId) {
-        Map<Long, String> names = new HashMap<>();
+    private Map<Long, UserLabel> names(Long groupId) {
+        Map<Long, UserLabel> names = new HashMap<>();
         for (GroupMember gm : members.findAllWithUser(groupId)) {
-            names.put(gm.getUser().getId(), gm.getUser().getUsername());
+            names.put(gm.getUser().getId(), UserLabel.of(gm.getUser()));
         }
         return names;
     }

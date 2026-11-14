@@ -311,4 +311,17 @@ public class AuthService {
     private static ResponseStatusException unauthorized() {
         return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Требуется вход");
     }
+    /** Участник выбирает себе значок перед именем. Пустое значение убирает его. */
+    @Transactional
+    public String setBadge(AppUser user, String badge) {
+        String value = Badges.normalize(badge);
+        if (!Badges.isAllowed(value)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Такого значка нет в наборе");
+        }
+        user.setBadge(value);
+        users.save(user);
+        return value;
+    }
+
 }

@@ -11,7 +11,7 @@ class FootballMatchScoreTest {
 
     private static FootballMatch finished(int h, int a, Integer eh, Integer ea, Integer ph, Integer pa) {
         FootballMatch m = new FootballMatch(1L);
-        m.applyFeed("A", "B", Instant.parse("2026-11-04T20:00:00Z"), LocalDate.of(2026, 11, 2),
+        m.applyFeed("A", "B", null, null, Instant.parse("2026-11-04T20:00:00Z"), LocalDate.of(2026, 11, 2),
                 "LEAGUE_STAGE", 4, MatchStatus.FINISHED, h, a, eh, ea, ph, pa,
                 ph != null ? "PENALTY_SHOOTOUT" : eh != null ? "EXTRA_TIME" : "REGULAR");
         return m;
@@ -58,7 +58,7 @@ class FootballMatchScoreTest {
     @Test
     void unfinishedMatchHasNoScore() {
         FootballMatch m = new FootballMatch(2L);
-        m.applyFeed("A", "B", Instant.parse("2026-11-04T20:00:00Z"), LocalDate.of(2026, 11, 2),
+        m.applyFeed("A", "B", null, null, Instant.parse("2026-11-04T20:00:00Z"), LocalDate.of(2026, 11, 2),
                 "LEAGUE_STAGE", 4, MatchStatus.FINISHED, null, null, null, null, null, null, null);
         assertFalse(m.isFinished());
         assertNull(m.scoreHome(new ScoreBasis(true, true)));
@@ -67,7 +67,7 @@ class FootballMatchScoreTest {
     @Test
     void missingPartsAreReportedOnlyForPartsTheGroupCounts() {
         FootballMatch m = new FootballMatch(3L);
-        m.applyFeed("A", "B", Instant.parse("2026-11-04T20:00:00Z"), LocalDate.of(2026, 11, 2),
+        m.applyFeed("A", "B", null, null, Instant.parse("2026-11-04T20:00:00Z"), LocalDate.of(2026, 11, 2),
                 "LEAGUE_STAGE", 4, MatchStatus.FINISHED, 1, 1, 0, 0, null, null, "PENALTY_SHOOTOUT");
         assertEquals(java.util.List.of(), m.missingParts(ScoreBasis.REGULAR_TIME));
         assertEquals(java.util.List.of(), m.missingParts(new ScoreBasis(true, false)));
@@ -75,7 +75,7 @@ class FootballMatchScoreTest {
         assertEquals(java.util.List.of("PENALTIES"), m.missingParts(new ScoreBasis(true, true)));
 
         FootballMatch noExtra = new FootballMatch(4L);
-        noExtra.applyFeed("A", "B", Instant.parse("2026-11-04T20:00:00Z"), LocalDate.of(2026, 11, 2),
+        noExtra.applyFeed("A", "B", null, null, Instant.parse("2026-11-04T20:00:00Z"), LocalDate.of(2026, 11, 2),
                 "LEAGUE_STAGE", 4, MatchStatus.FINISHED, 1, 1, null, null, 4, 3, "PENALTY_SHOOTOUT");
         assertEquals(java.util.List.of("EXTRA_TIME"),
                 noExtra.missingParts(new ScoreBasis(true, true)));

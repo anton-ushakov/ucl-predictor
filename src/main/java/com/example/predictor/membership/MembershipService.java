@@ -52,7 +52,7 @@ public class MembershipService {
     }
 
     /** Участник приложения глазами владельца группы: кого можно позвать, кто уже внутри. */
-    public record CandidateDto(Long userId, String username, boolean member, boolean owner,
+    public record CandidateDto(Long userId, String username, String badge, boolean member, boolean owner,
                                boolean pendingInvite, boolean pendingRequest) {
         /** Можно отметить галочкой для приглашения. */
         public boolean invitable() {
@@ -138,7 +138,7 @@ public class MembershipService {
         for (AppUser user : users.findAll()) {
             GroupRole role = roles.get(user.getId());
             RequestKind kind = pending.get(user.getId());
-            result.add(new CandidateDto(user.getId(), user.getUsername(),
+            result.add(new CandidateDto(user.getId(), user.getUsername(), user.getBadge(),
                     role != null, role == GroupRole.OWNER,
                     kind == RequestKind.INVITE, kind == RequestKind.REQUEST));
         }

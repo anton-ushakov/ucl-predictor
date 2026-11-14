@@ -14,6 +14,7 @@ import com.example.predictor.group.GroupAccess;
 import com.example.predictor.group.GroupAccess.Membership;
 import com.example.predictor.group.RulesService;
 import com.example.predictor.group.RulesService.Rules;
+import com.example.predictor.common.UserLabel;
 import com.example.predictor.names.TeamNameMap;
 import com.example.predictor.names.TeamNamesService;
 import com.example.predictor.repository.AppUserRepository;
@@ -166,9 +167,13 @@ public class RoundService {
         boolean frozen = rulesService.isFrozen(groupId, week);
         TeamNameMap teamLabels = teamNames.mapFor(group);
         List<GroupMember> memberList = members.findAllWithUser(groupId);
-        Map<Long, String> names = new HashMap<>();
+        Map<Long, UserLabel> names = new HashMap<>();
+        // для блока голосования по спорному счёту хватит имени одной строкой
+        Map<Long, String> plainNames = new HashMap<>();
         for (GroupMember gm : memberList) {
-            names.put(gm.getUser().getId(), gm.getUser().getUsername());
+            UserLabel label = UserLabel.of(gm.getUser());
+            names.put(gm.getUser().getId(), label);
+            plainNames.put(gm.getUser().getId(), label.display());
         }
 
         List<Prediction> all = predictions.findForRound(groupId, week);
@@ -221,9 +226,10 @@ public class RoundService {
                 sorted.sort(Comparator.comparing(Prediction::getCreatedAt));
                 for (Prediction p : sorted) {
                     if (!p.getUser().getId().equals(me)) {
-                        others.add(new OtherPrediction(p.getUser().getId(),
-                                names.getOrDefault(p.getUser().getId(), "?"),
-                                p.getHomeGoals(), p.getAwayGoals(), p.getCreatedAt(), pointsFor(m, p, info, rules.scoring())));
+                        UserLabel who = names.getOrDefault(p.getUser().getId(), UserLabel.UNKNOWN);
+                        others.add(new OtherPrediction(p.getUser().getId(), who.username(), who.badge(),
+                                p.getHomeGoals(), p.getAwayGoals(), p.getCreatedAt(),
+                                pointsFor(m, p, info, rules.scoring())));
                     }
                 }
             }
@@ -233,13 +239,14 @@ public class RoundService {
             ScoreDetail detail = m.getHomeScore() == null ? null : new ScoreDetail(
                     m.getHomeScore(), m.getAwayScore(), m.getExtraHome(), m.getExtraAway(),
                     m.getPenHome(), m.getPenAway());
-            ScoreDecisionView decision = decisionService.toView(info, me, ms.isOwner(), names);
+            ScoreDecisionView decision = decisionService.toView(info, me, ms.isOwner(), plainNames);
             if (decision != null && (decision.canPropose() || decision.canVote())) {
                 decisionsForMe++;
             }
             boolean counted = info.kind().counted();
             views.add(new MatchView(m.getId(), teamLabels.display(m.getHomeTeam()),
-                    teamLabels.display(m.getAwayTeam()), m.getKickoffAt(), lockAt,
+                    teamLabels.display(m.getAwayTeam()), m.getHomeCrest(), m.getAwayCrest(),
+                    m.getKickoffAt(), lockAt,
                     m.getStage(), m.getMatchday(), m.getStatus(),
                     counted ? m.scoreHome(info.basis()) : null, counted ? m.scoreAway(info.basis()) : null,
                     detail, info.kind().name(), decision, isOpen, locked, forMatch.size(), memberList.size(), myView, visible, others));
@@ -251,7 +258,8 @@ public class RoundService {
         List<StandingRow> standings = new ArrayList<>();
         if (finalized) {
             for (RoundResult r : finalRows) {
-                standings.add(new StandingRow(r.getUserId(), names.getOrDefault(r.getUserId(), "?"),
+                UserLabel who = names.getOrDefault(r.getUserId(), UserLabel.UNKNOWN);
+                standings.add(new StandingRow(r.getUserId(), who.username(), who.badge(),
                         r.getPlace(), r.getPoints(), r.getExactScores(), r.getOutcomeHits(),
                         r.getGoalDiffHits(), r.getGoalError(), r.isWinner(), r.isLoser()));
             }
@@ -307,7 +315,7 @@ public class RoundService {
     }
 
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,
-                                          List<Prediction> all, Rules rules, Map<Long, String> names,
+                                          List<Prediction> all, Rules rules, Map<Long, UserLabel> names,
                                           Map<Long, ScoreDecisionService.Info> infos) {
         List<StandingsCalculator.FinishedMatch> finished = new ArrayList<>();
         for (FootballMatch m : weekMatches) {
@@ -334,7 +342,8 @@ public class RoundService {
         List<StandingRow> result = new ArrayList<>();
         for (StandingsCalculator.Row r : rows) {
             // победитель и проигравший определяются только по окончании тура
-            result.add(new StandingRow(r.userId(), names.getOrDefault(r.userId(), "?"), r.place(),
+            UserLabel who = names.getOrDefault(r.userId(), UserLabel.UNKNOWN);
+            result.add(new StandingRow(r.userId(), who.username(), who.badge(), r.place(),
                     r.points(), r.exactScores(), r.outcomeHits(), r.goalDiffHits(), r.goalError(),
                     false, false));
         }

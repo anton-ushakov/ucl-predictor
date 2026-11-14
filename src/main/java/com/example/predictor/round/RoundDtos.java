@@ -40,7 +40,8 @@ public final class RoundDtos {
     public record MyPrediction(int homeGoals, int awayGoals, Instant savedAt, Integer points) {
     }
 
-    public record OtherPrediction(Long userId, String username, int homeGoals, int awayGoals,
+    public record OtherPrediction(Long userId, String username, String badge,
+                                  int homeGoals, int awayGoals,
                                   Instant savedAt, Integer points) {
     }
 
@@ -53,7 +54,8 @@ public final class RoundDtos {
      * counting: как матч учитывается (FULL, REGULAR_ONLY, EXCLUDED, NEEDS_DECISION, VOTING, NOT_PLAYED,
      * CANCELLED). homeScore и awayScore пусты, пока матч не идёт в зачёт.
      */
-    public record MatchView(Long matchId, String homeTeam, String awayTeam, Instant kickoffAt,
+    public record MatchView(Long matchId, String homeTeam, String awayTeam,
+                            String homeCrest, String awayCrest, Instant kickoffAt,
                             Instant lockAt, String stage, Integer matchday, MatchStatus status,
                             Integer homeScore, Integer awayScore, ScoreDetail scoreDetail,
                             String counting, ScoreDecisionView scoreDecision,
@@ -82,7 +84,8 @@ public final class RoundDtos {
     public record ProposeRequest(@NotNull Boolean countRegularTimeOnly) {
     }
 
-    public record StandingRow(Long userId, String username, int place, int points, int exactScores,
+    public record StandingRow(Long userId, String username, String badge,
+                              int place, int points, int exactScores,
                               int outcomeHits, int goalDiffHits, int goalError,
                               boolean winner, boolean loser) {
     }

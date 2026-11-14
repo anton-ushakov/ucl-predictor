@@ -21,6 +21,10 @@ public class AppUser {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    /** Значок перед именем. Участник выбирает его сам, null — без значка. */
+    @Column(length = 16)
+    private String badge;
+
     /** Хеш кода восстановления доступа (сам код хранится только у пользователя). */
     @Column(name = "recovery_hash", length = 100)
     private String recoveryHash;
@@ -139,6 +143,10 @@ public class AppUser {
     public boolean hasPin() {
         return pinHash != null;
     }
+
+    public String getBadge() { return badge; }
+
+    public void setBadge(String badge) { this.badge = badge; }
 
     public Long getId() { return id; }
     public String getUsername() { return username; }

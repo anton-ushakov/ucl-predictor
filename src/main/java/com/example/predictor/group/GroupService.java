@@ -34,7 +34,7 @@ public class GroupService {
     public record GroupDto(Long id, String name, String inviteCode, int memberCount, GroupRole myRole) {
     }
 
-    public record MemberDto(Long userId, String username, GroupRole role) {
+    public record MemberDto(Long userId, String username, String badge, GroupRole role) {
     }
 
     /**
@@ -133,7 +133,8 @@ public class GroupService {
         Membership ms = access.require(current, groupId);
         FriendGroup g = ms.group();
         List<MemberDto> memberDtos = members.findAllWithUser(g.getId()).stream()
-                .map(m -> new MemberDto(m.getUser().getId(), m.getUser().getUsername(), m.getRole()))
+                .map(m -> new MemberDto(m.getUser().getId(), m.getUser().getUsername(),
+                        m.getUser().getBadge(), m.getRole()))
                 .toList();
         SettingsDto settings = new SettingsDto(g.getLockMinutesBefore(),
                 g.tiebreakerList().stream().map(Enum::name).toList(), g.getRevealMode(),

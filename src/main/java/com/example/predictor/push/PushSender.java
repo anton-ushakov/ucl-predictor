@@ -3,8 +3,6 @@ package com.example.predictor.push;
 import com.example.predictor.domain.DeviceToken;
 import com.example.predictor.domain.Notification;
 import com.example.predictor.repository.DeviceTokenRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatusCode;
@@ -33,7 +31,6 @@ public class PushSender {
 
     private final FirebaseAccess firebase;
     private final DeviceTokenRepository devices;
-    private final ObjectMapper json = new ObjectMapper();
     private final RestClient http = RestClient.create();
 
     public PushSender(FirebaseAccess firebase, DeviceTokenRepository devices) {
@@ -84,23 +81,26 @@ public class PushSender {
     }
 
     private boolean send(String accessToken, String deviceToken, Notification n, List<String> dead) {
-        ObjectNode message = json.createObjectNode();
-        ObjectNode body = message.putObject("message");
-        body.put("token", deviceToken);
-        ObjectNode notification = body.putObject("notification");
-        notification.put("title", n.getTitle());
-        notification.put("body", n.getBody());
         // данные нужны приложению, чтобы открыть нужный экран
-        ObjectNode data = body.putObject("data");
-        data.put("type", n.getType().name());
-        data.put("notificationId", String.valueOf(n.getId()));
+        StringBuilder data = new StringBuilder("{")
+                .append("\"type\":\"").append(n.getType().name()).append("\",")
+                .append("\"notificationId\":\"").append(n.getId()).append("\"");
         if (n.getGroupId() != null) {
-            data.put("groupId", String.valueOf(n.getGroupId()));
+            data.append(",\"groupId\":\"").append(n.getGroupId()).append("\"");
         }
         if (n.getRoundWeek() != null) {
-            data.put("week", n.getRoundWeek().toString());
+            data.append(",\"week\":\"").append(n.getRoundWeek()).append("\"");
         }
-        body.putObject("android").put("priority", "high");
+        data.append("}");
+
+        String message = "{\"message\":{"
+                + "\"token\":\"" + Json.escape(deviceToken) + "\","
+                + "\"notification\":{"
+                + "\"title\":\"" + Json.escape(n.getTitle()) + "\","
+                + "\"body\":\"" + Json.escape(n.getBody()) + "\"},"
+                + "\"data\":" + data + ","
+                + "\"android\":{\"priority\":\"high\"}"
+                + "}}";
 
         try {
             http.post()
@@ -108,7 +108,7 @@ public class PushSender {
                             + "/messages:send")
                     .header("Authorization", "Bearer " + accessToken)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(message.toString())
+                    .body(message)
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (request, response) -> {
                         int status = response.getStatusCode().value();

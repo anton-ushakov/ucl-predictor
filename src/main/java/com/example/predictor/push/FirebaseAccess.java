@@ -1,7 +1,5 @@
 package com.example.predictor.push;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,7 +34,6 @@ public class FirebaseAccess {
     private static final Logger log = LoggerFactory.getLogger(FirebaseAccess.class);
     private static final String SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 
-    private final ObjectMapper json = new ObjectMapper();
     private final RestClient http = RestClient.create();
 
     private final String projectId;
@@ -58,11 +55,11 @@ public class FirebaseAccess {
         if (credentialsPath != null && !credentialsPath.isBlank()) {
             Path path = Path.of(credentialsPath.trim());
             try {
-                JsonNode node = json.readTree(Files.readString(path, StandardCharsets.UTF_8));
-                id = text(node, "project_id");
-                email = text(node, "client_email");
-                String rawKey = text(node, "private_key");
-                String maybeUri = text(node, "token_uri");
+                String file = Files.readString(path, StandardCharsets.UTF_8);
+                id = Json.stringField(file, "project_id");
+                email = Json.stringField(file, "client_email");
+                String rawKey = Json.stringField(file, "private_key");
+                String maybeUri = Json.stringField(file, "token_uri");
                 if (maybeUri != null && !maybeUri.isBlank()) {
                     uri = maybeUri;
                 }
@@ -104,29 +101,29 @@ public class FirebaseAccess {
         long issued = now.getEpochSecond();
         long expires = issued + 3600;
 
-        String header = base64(json.createObjectNode()
-                .put("alg", "RS256").put("typ", "JWT").toString());
-        String claims = base64(json.createObjectNode()
-                .put("iss", clientEmail)
-                .put("scope", SCOPE)
-                .put("aud", tokenUri)
-                .put("iat", issued)
-                .put("exp", expires)
-                .toString());
+        String header = base64("{\"alg\":\"RS256\",\"typ\":\"JWT\"}");
+        String claims = base64("{"
+                + "\"iss\":\"" + Json.escape(clientEmail) + "\","
+                + "\"scope\":\"" + SCOPE + "\","
+                + "\"aud\":\"" + Json.escape(tokenUri) + "\","
+                + "\"iat\":" + issued + ","
+                + "\"exp\":" + expires
+                + "}");
         String signed = header + "." + claims;
         String assertion = signed + "." + sign(signed);
 
-        JsonNode response = http.post()
+        String response = http.post()
                 .uri(tokenUri)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body("grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=" + assertion)
                 .retrieve()
-                .body(JsonNode.class);
+                .body(String.class);
 
-        if (response == null || response.get("access_token") == null) {
+        String token = Json.stringField(response, "access_token");
+        if (token == null) {
             throw new IllegalStateException("Firebase не выдал токен доступа");
         }
-        accessToken = response.get("access_token").asText();
+        accessToken = token;
         // обновляем за пять минут до конца, чтобы не попасть на просроченный
         accessTokenUntil = now.plusSeconds(3600 - 300);
         return accessToken;
@@ -146,11 +143,6 @@ public class FirebaseAccess {
     private static String base64(String value) {
         return Base64.getUrlEncoder().withoutPadding()
                 .encodeToString(value.getBytes(StandardCharsets.UTF_8));
-    }
-
-    private static String text(JsonNode node, String field) {
-        JsonNode value = node.get(field);
-        return value == null || value.isNull() ? null : value.asText();
     }
 
     /** Ключ в файле лежит в текстовом виде PEM: убираем обрамление и переводы строк. */

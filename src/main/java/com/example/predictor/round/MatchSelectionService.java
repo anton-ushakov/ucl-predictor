@@ -46,11 +46,17 @@ public class MatchSelectionService {
     private final PredictionRepository predictions;
     private final AppTime time;
     private final TeamNamesService teamNames;
+    private final com.example.predictor.repository.GroupAutoCompetitionRepository autos;
+    private final AutoSelectionService autoSelection;
 
     public MatchSelectionService(GroupAccess access, RulesService rulesService,
                                  CompetitionRepository competitions, MatchRepository matches,
                                  RoundMatchRepository selection, PredictionRepository predictions,
-                                 AppTime time, TeamNamesService teamNames) {
+                                 AppTime time, TeamNamesService teamNames,
+                                 com.example.predictor.repository.GroupAutoCompetitionRepository autos,
+                                 AutoSelectionService autoSelection) {
+        this.autos = autos;
+        this.autoSelection = autoSelection;
         this.teamNames = teamNames;
         this.access = access;
         this.rulesService = rulesService;
@@ -66,8 +72,9 @@ public class MatchSelectionService {
     @Transactional(readOnly = true)
     public List<CompetitionDto> competitions(AppUser user, Long groupId) {
         access.require(user, groupId);
+        Set<Long> auto = autoIds(groupId);
         return competitions.findByEnabledTrueOrderBySortOrderAscNameAsc().stream()
-                .map(MatchSelectionService::toDto)
+                .map(c -> toDto(c, auto))
                 .toList();
     }
 
@@ -126,8 +133,10 @@ public class MatchSelectionService {
                 + "убрать из тура нельзя."
                 : "Матчи этого турнира добавляются вручную: укажите команды и время начала, "
                 + "а после игры введите счёт.";
+        Set<Long> auto = autoIds(groupId);
         return new SelectionView(week, chosen.getId(), ms.isOwner(), !chosen.isSynced(),
-                selected.size(), all.stream().map(MatchSelectionService::toDto).toList(), views, note);
+                auto.contains(chosen.getId()), selected.size(),
+                all.stream().map(c -> toDto(c, auto)).toList(), views, note);
     }
 
     // ------------------------------------------------------------------ состав тура
@@ -316,8 +325,44 @@ public class MatchSelectionService {
         return ids;
     }
 
-    private static CompetitionDto toDto(Competition c) {
-        return new CompetitionDto(c.getId(), c.getCode(), c.getName(), c.getShortName(), c.isSynced());
+    private static CompetitionDto toDto(Competition c, Set<Long> auto) {
+        return new CompetitionDto(c.getId(), c.getCode(), c.getName(), c.getShortName(), c.isSynced(),
+                auto.contains(c.getId()));
+    }
+
+    private Set<Long> autoIds(Long groupId) {
+        Set<Long> ids = new HashSet<>();
+        for (var a : autos.findByGroupId(groupId)) {
+            ids.add(a.getCompetitionId());
+        }
+        return ids;
+    }
+
+    /**
+     * Включает или выключает автосостав турнира: все его матчи попадают в тур сами.
+     * При включении матчи ближайших недель добавляются сразу.
+     */
+    @Transactional
+    public SelectionResult setAuto(AppUser user, Long groupId, Long competitionId, boolean enabled) {
+        Membership ms = access.require(user, groupId);
+        requireOwner(ms);
+        Competition competition = competitions.findById(competitionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Турнир не найден"));
+        if (!competition.isSynced()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Матчи этого турнира добавляются вручную, автосоставу брать их неоткуда");
+        }
+        var existing = autos.findByGroupIdAndCompetitionId(groupId, competitionId);
+        if (!enabled) {
+            existing.ifPresent(autos::delete);
+            return new SelectionResult(0, 0, "Автосостав выключен: " + competition.getShortName());
+        }
+        if (existing.isEmpty()) {
+            autos.save(new com.example.predictor.domain.GroupAutoCompetition(groupId, competitionId));
+        }
+        int added = autoSelection.apply(groupId, competitionId);
+        return new SelectionResult(0, added, "Автосостав включён: " + competition.getShortName()
+                + ". Матчей добавлено в туры: " + added);
     }
 
     private static void requireMonday(LocalDate week) {

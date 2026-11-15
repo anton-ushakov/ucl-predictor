@@ -39,6 +39,17 @@ public class SelectionController {
         return service.competitions(user, groupId);
     }
 
+    /** Включить или выключить автосостав турнира: его матчи попадают в тур сами. */
+    @PutMapping("/competitions/{competitionId}/auto")
+    public SelectionResult setAuto(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("competitionId") Long competitionId,
+            @RequestBody SelectionDtos.AutoRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        return service.setAuto(user, groupId, competitionId, request.enabled());
+    }
+
     /** Матчи турнира за неделю тура: что уже в туре, что можно добавить. */
     @GetMapping("/rounds/{week}/selection")
     public SelectionView selection(

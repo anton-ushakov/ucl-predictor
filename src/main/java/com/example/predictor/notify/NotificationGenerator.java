@@ -72,6 +72,7 @@ public class NotificationGenerator {
     private final RulesService rulesService;
     private final RoundMessageRepository roundMessages;
     private final com.example.predictor.push.PushSender push;
+    private final com.example.predictor.repository.MatchRepository matchRepository;
     private final AppTime time;
 
     public NotificationGenerator(FriendGroupRepository groups, GroupMemberRepository members,
@@ -82,7 +83,9 @@ public class NotificationGenerator {
                                  NotificationSettingsRepository settings, RulesService rulesService,
                                  RoundMessageRepository roundMessages,
                                  com.example.predictor.push.PushSender push,
+                                 com.example.predictor.repository.MatchRepository matchRepository,
                                  AppTime time) {
+        this.matchRepository = matchRepository;
         this.groups = groups;
         this.members = members;
         this.roundMatches = roundMatches;
@@ -118,6 +121,7 @@ public class NotificationGenerator {
                 daySummaries(group, memberList, wants, now, created);
                 roundSummaries(group, memberList, wants, now, created);
                 discussions(group, memberList, wants, now, created);
+                roundSetup(group, memberList, now, created);
             } catch (RuntimeException e) {
                 log.warn("Не удалось подготовить оповещения для группы {}: {}",
                         group.getId(), e.getMessage());
@@ -463,6 +467,44 @@ public class NotificationGenerator {
                 out.add(new Notification(userId, group.getId(), NotificationType.DISCUSSION, key,
                         text.title(), text.body(), week, now));
             }
+        }
+    }
+
+    // ------------------------------------------------------------------ напоминание владельцу
+
+    /** За сколько до первых игр недели напоминаем владельцу, что тур не собран. */
+    private static final Duration SETUP_WARNING = Duration.ofHours(48);
+
+    /**
+     * Если на неделю не выбрано ни одного матча, а игры начнутся в ближайшие двое суток,
+     * владелец группы получает напоминание: без выбора тура просто не будет.
+     */
+    private void roundSetup(FriendGroup group, List<GroupMember> memberList, Instant now,
+                            List<Notification> out) {
+        Long ownerId = null;
+        for (GroupMember gm : memberList) {
+            if (gm.getRole() == com.example.predictor.domain.GroupRole.OWNER) {
+                ownerId = gm.getUser().getId();
+                break;
+            }
+        }
+        if (ownerId == null) {
+            return;
+        }
+        LocalDate last = time.lastPredictableWeek();
+        for (LocalDate week = time.currentWeek(); !week.isAfter(last) && !week.isAfter(
+                time.currentWeek().plusWeeks(1)); week = week.plusWeeks(1)) {
+            if (!roundMatches.forRound(group.getId(), week).isEmpty()) {
+                continue;
+            }
+            long soon = matchRepository.countUpcoming(week, MatchStatus.SCHEDULED, now,
+                    now.plus(SETUP_WARNING));
+            if (soon == 0) {
+                continue;
+            }
+            Text text = NotificationTexts.roundSetup(group.getName(), week);
+            out.add(new Notification(ownerId, group.getId(), NotificationType.ROUND_SETUP,
+                    "setup:" + group.getId() + ":" + week, text.title(), text.body(), week, now));
         }
     }
 

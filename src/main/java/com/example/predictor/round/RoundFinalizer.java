@@ -48,12 +48,14 @@ public class RoundFinalizer {
     private final AppTime time;
     private final TransactionTemplate tx;
     private final ScoreDecisionService decisionService;
+    private final DebtService debtService;
 
     public RoundFinalizer(PredictionRepository predictions, RoundMatches roundMatches,
                           RoundResultRepository results, FriendGroupRepository groups,
                           GroupMemberRepository members, RulesService rulesService, AppTime time,
                           PlatformTransactionManager transactionManager,
-                          ScoreDecisionService decisionService) {
+                          ScoreDecisionService decisionService, DebtService debtService) {
+        this.debtService = debtService;
         this.predictions = predictions;
         this.roundMatches = roundMatches;
         this.results = results;
@@ -150,6 +152,8 @@ public class RoundFinalizer {
                     r.winner(), r.loser(), tiebreakersCsv, rules.scoreBasis(), now));
         }
         results.saveAll(toSave);
+        // долговая книга: каждый проигравший должен шаурму каждому победителю
+        debtService.record(groupId, week, toSave, now);
         return true;
     }
 }

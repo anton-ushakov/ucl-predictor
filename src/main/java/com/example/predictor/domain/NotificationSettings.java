@@ -46,6 +46,8 @@ public class NotificationSettings {
             case DISCUSSION -> discussion;
             // о новой версии сообщаем всегда: выключать это участнику нечего
             case APP_UPDATE -> true;
+            // без выбранных матчей тура не будет: владельцу напоминаем всегда
+            case ROUND_SETUP -> true;
         };
     }
 

@@ -23,7 +23,8 @@ public final class SelectionDtos {
      * добавляет владелец группы вручную (так сделаны Лига Европы, чемпионат России и сборные —
      * их нет в бесплатном тарифе источника).
      */
-    public record CompetitionDto(Long id, String code, String name, String shortName, boolean synced) {
+    public record CompetitionDto(Long id, String code, String name, String shortName, boolean synced,
+                                 boolean auto) {
     }
 
     /**
@@ -39,9 +40,14 @@ public final class SelectionDtos {
 
     /** Экран отбора матчей: турниры, матчи выбранного турнира и что с ними можно делать. */
     public record SelectionView(LocalDate week, Long competitionId, boolean canEdit,
-                                boolean manualCompetition, int selectedInRound,
+                                boolean manualCompetition, boolean autoCompetition,
+                                int selectedInRound,
                                 List<CompetitionDto> competitions, List<SelectableMatch> matches,
                                 String note) {
+    }
+
+    /** Автосостав турнира: его матчи попадают в тур сами. */
+    public record AutoRequest(boolean enabled) {
     }
 
     public record SelectRequest(@NotEmpty(message = "Не выбрано ни одного матча") List<Long> matchIds) {

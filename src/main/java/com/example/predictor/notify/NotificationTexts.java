@@ -129,4 +129,12 @@ public final class NotificationTexts {
         return one.length() <= max ? one : one.substring(0, max - 1) + "…";
     }
 
+    /** Владельцу: матчи тура не выбраны, а игры уже скоро. */
+    public static Text roundSetup(String groupName, LocalDate week) {
+        return new Text(
+                "Матчи тура не выбраны",
+                groupName + ": на неделю с " + week.format(DAY)
+                        + " матчи не выбраны, а первые игры уже скоро. Без выбора тура не будет.");
+    }
+
 }

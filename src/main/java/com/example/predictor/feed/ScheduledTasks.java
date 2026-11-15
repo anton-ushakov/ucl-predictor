@@ -23,8 +23,12 @@ public class ScheduledTasks {
     private final NotificationGenerator notifications;
     private boolean warnedAboutToken;
 
+    private final com.example.predictor.round.AutoSelectionService autoSelection;
+
     public ScheduledTasks(FootballDataClient client, MatchSyncService sync, RoundFinalizer finalizer,
-                          NotificationGenerator notifications) {
+                          NotificationGenerator notifications,
+                          com.example.predictor.round.AutoSelectionService autoSelection) {
+        this.autoSelection = autoSelection;
         this.notifications = notifications;
         this.client = client;
         this.sync = sync;
@@ -45,6 +49,11 @@ public class ScheduledTasks {
             warnedAboutToken = true;
             log.warn("Токен football-data.org не задан (переменная окружения FOOTBALL_DATA_TOKEN): "
                     + "матчи не загружаются");
+        }
+        try {
+            autoSelection.run();
+        } catch (RuntimeException e) {
+            log.error("Ошибка автосостава туров", e);
         }
         try {
             finalizer.finalizeReadyRounds();

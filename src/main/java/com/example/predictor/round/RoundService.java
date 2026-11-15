@@ -106,6 +106,13 @@ public class RoundService {
         Set<LocalDate> finalized = new HashSet<>(results.findFinalizedWeeks(groupId));
         Instant now = Instant.now();
 
+        // кто на какие матчи уже сделал прогноз: по этому видно, все ли готовы к туру
+        List<GroupMember> memberList = members.findAllWithUser(groupId);
+        Map<Long, Set<Long>> matchesByUser = new HashMap<>();
+        for (Object[] pair : predictions.findUserMatchPairs(groupId, from, to)) {
+            matchesByUser.computeIfAbsent((Long) pair[0], k -> new HashSet<>()).add((Long) pair[1]);
+        }
+
         List<RoundSummary> list = new ArrayList<>();
         for (Map.Entry<LocalDate, List<FootballMatch>> e : byWeek.entrySet()) {
             LocalDate week = e.getKey();
@@ -131,18 +138,34 @@ public class RoundService {
                     started = true;
                 }
             }
+            // участник готов к туру, если у него есть прогноз на каждый неотменённый матч
+            Set<Long> playable = new HashSet<>();
+            for (FootballMatch m : e.getValue()) {
+                if (m.getStatus() != MatchStatus.CANCELLED && m.getStatus() != MatchStatus.POSTPONED) {
+                    playable.add(m.getId());
+                }
+            }
+            int ready = 0;
+            for (GroupMember gm : memberList) {
+                Set<Long> his = matchesByUser.get(gm.getUser().getId());
+                if (!playable.isEmpty() && his != null && his.containsAll(playable)) {
+                    ready++;
+                }
+            }
             list.add(new RoundSummary(week,
                     RoundStatus.of(finalized.contains(week), started, allOver,
                             weeksWithPredictions.contains(week)),
                     e.getValue().size(), predicted, open, e.getValue().get(0).getKickoffAt(),
-                    !week.isBefore(time.currentWeek()) && !week.isAfter(to)));
+                    !week.isBefore(time.currentWeek()) && !week.isAfter(to),
+                    ready, memberList.size()));
         }
 
         // Текущая и следующая недели показываются всегда, даже если владелец ещё не выбрал матчи:
         // иначе ему некуда нажать, чтобы их выбрать.
         for (LocalDate week = time.currentWeek(); !week.isAfter(to); week = week.plusWeeks(1)) {
             if (!byWeek.containsKey(week)) {
-                list.add(new RoundSummary(week, RoundStatus.UPCOMING, 0, 0, 0, null, true));
+                list.add(new RoundSummary(week, RoundStatus.UPCOMING, 0, 0, 0, null, true,
+                        0, memberList.size()));
             }
         }
         list.sort(Comparator.comparing(RoundSummary::week).reversed());

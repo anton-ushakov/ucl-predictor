@@ -20,6 +20,15 @@ public interface MatchRepository extends JpaRepository<FootballMatch, Long> {
     @Query("select distinct m.roundWeek from FootballMatch m order by m.roundWeek")
     List<LocalDate> findAllRoundWeeks();
 
+    /** Сколько загруженных матчей недели начнётся в указанный промежуток. */
+    @Query("select count(m) from FootballMatch m where m.roundWeek = :week "
+            + "and m.ownerGroupId is null and m.status = :status "
+            + "and m.kickoffAt between :from and :to")
+    long countUpcoming(@Param("week") LocalDate week,
+                       @Param("status") com.example.predictor.domain.MatchStatus status,
+                       @Param("from") java.time.Instant from,
+                       @Param("to") java.time.Instant to);
+
     /** Оригинальные названия команд-хозяев во всех матчах, доступных группе. */
     @Query("select distinct m.homeTeam from FootballMatch m "
             + "where m.ownerGroupId is null or m.ownerGroupId = :groupId")

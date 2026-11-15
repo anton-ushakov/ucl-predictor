@@ -102,7 +102,8 @@ public final class RoundDtos {
      * менять (это текущая или следующая неделя), и владельцу группы показывается кнопка выбора матчей.
      */
     public record RoundSummary(LocalDate week, RoundStatus status, int matches, int predictedByMe,
-                               int openForMe, Instant firstKickoff, boolean selectable) {
+                               int openForMe, Instant firstKickoff, boolean selectable,
+                               int membersPredicted, int memberCount) {
     }
 
     public record Entry(@NotNull Long matchId,

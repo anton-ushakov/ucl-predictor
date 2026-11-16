@@ -36,6 +36,14 @@ public class Competition {
     @Column(name = "sort_order", nullable = false)
     private int sortOrder = 100;
 
+    /** Источник матчей: FOOTBALL_DATA, API_FOOTBALL или MANUAL. */
+    @Column(nullable = false, length = 20)
+    private String source = "FOOTBALL_DATA";
+
+    /** Номер турнира в источнике. У football-data вместо него code. */
+    @Column(name = "external_id")
+    private Integer externalId;
+
     protected Competition() {
     }
 
@@ -46,4 +54,6 @@ public class Competition {
     public boolean isSynced() { return synced; }
     public boolean isEnabled() { return enabled; }
     public int getSortOrder() { return sortOrder; }
+    public String getSource() { return source; }
+    public Integer getExternalId() { return externalId; }
 }

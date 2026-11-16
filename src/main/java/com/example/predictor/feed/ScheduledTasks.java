@@ -24,15 +24,37 @@ public class ScheduledTasks {
     private boolean warnedAboutToken;
 
     private final com.example.predictor.round.AutoSelectionService autoSelection;
+    private final ApiFootballSyncService apiFootball;
 
     public ScheduledTasks(FootballDataClient client, MatchSyncService sync, RoundFinalizer finalizer,
                           NotificationGenerator notifications,
-                          com.example.predictor.round.AutoSelectionService autoSelection) {
+                          com.example.predictor.round.AutoSelectionService autoSelection,
+                          ApiFootballSyncService apiFootball) {
+        this.apiFootball = apiFootball;
         this.autoSelection = autoSelection;
         this.notifications = notifications;
         this.client = client;
         this.sync = sync;
         this.finalizer = finalizer;
+    }
+
+    /**
+     * Счёт идущих матчей из api-sports.io. Отдельно от общего обновления: пока матчи идут,
+     * смотреть раз в полчаса поздно, а когда их нет, запрос не тратится совсем.
+     */
+    @Scheduled(initialDelayString = "PT3M", fixedDelayString = "${app.api-football.live-interval:PT10M}")
+    public void liveScores() {
+        if (!apiFootball.isConfigured()) {
+            return;
+        }
+        try {
+            int touched = apiFootball.syncLive();
+            if (touched > 0) {
+                log.debug("Счёт идущих матчей обновлён: {}", touched);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Не удалось обновить счёт идущих матчей: {}", e.getMessage());
+        }
     }
 
     @Scheduled(initialDelayString = "PT20S", fixedDelayString = "${app.football-data.sync-interval:PT30M}")
@@ -49,6 +71,20 @@ public class ScheduledTasks {
             warnedAboutToken = true;
             log.warn("Токен football-data.org не задан (переменная окружения FOOTBALL_DATA_TOKEN): "
                     + "матчи не загружаются");
+        }
+        // второй источник: турниры, которых нет в бесплатном тарифе football-data.org
+        if (apiFootball.isConfigured()) {
+            try {
+                ApiFootballSyncService.Result r = apiFootball.syncFixtures(false);
+                if (r.competitions() > 0) {
+                    log.info("api-sports.io: турниров {}, получено {}, создано {}, обновлено {}, "
+                                    + "пропущено {}; запросов осталось сегодня {}",
+                            r.competitions(), r.fetched(), r.created(), r.updated(), r.skipped(),
+                            apiFootball.requestsLeft());
+                }
+            } catch (RuntimeException e) {
+                log.warn("Не удалось обновить матчи из api-sports.io: {}", e.getMessage());
+            }
         }
         try {
             autoSelection.run();

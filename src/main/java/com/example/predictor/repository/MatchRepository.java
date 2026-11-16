@@ -17,6 +17,18 @@ public interface MatchRepository extends JpaRepository<FootballMatch, Long> {
 
     List<FootballMatch> findByExternalIdIn(Collection<Long> externalIds);
 
+    /** Номера матчей у разных источников свои, поэтому ищем парой. */
+    List<FootballMatch> findBySourceAndExternalIdIn(String source, Collection<Long> externalIds);
+
+    /** Сколько матчей этих турниров сейчас могут идти: начались недавно и не завершены. */
+    @Query("select count(m) from FootballMatch m where m.competition.id in :competitionIds "
+            + "and m.kickoffAt between :from and :to "
+            + "and (m.status = com.example.predictor.domain.MatchStatus.SCHEDULED "
+            + "or m.status = com.example.predictor.domain.MatchStatus.LIVE)")
+    long countPlaying(@Param("competitionIds") Collection<Long> competitionIds,
+                      @Param("from") java.time.Instant from,
+                      @Param("to") java.time.Instant to);
+
     @Query("select distinct m.roundWeek from FootballMatch m order by m.roundWeek")
     List<LocalDate> findAllRoundWeeks();
 

@@ -47,6 +47,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       SERVER_PORT: 8080
       FOOTBALL_DATA_TOKEN: ${FOOTBALL_DATA_TOKEN:?задайте FOOTBALL_DATA_TOKEN в файле .env}
+      # Второй источник матчей, необязательный
+      API_FOOTBALL_KEY: ${API_FOOTBALL_KEY:-}
       APP_PREDICTIONS_WEEKS_AHEAD: ${WEEKS_AHEAD:-4}
       # Часовой пояс, по которому считаются недели туров и время закрытия приёма
       APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Moscow}

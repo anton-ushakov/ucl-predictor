@@ -73,7 +73,8 @@ public class MatchSyncService {
         LocalDate to = time.lastPredictableWeek().plusDays(6);
         Result total = new Result(0, 0, 0, 0, 0);
 
-        List<Competition> list = competitions.findBySyncedTrueAndEnabledTrueOrderBySortOrderAsc();
+        List<Competition> list = competitions
+                .findBySourceAndSyncedTrueAndEnabledTrueOrderBySortOrderAsc(MatchSource.FOOTBALL_DATA);
         boolean first = true;
         for (Competition competition : list) {
             String code = competition.getCode();
@@ -121,7 +122,8 @@ public class MatchSyncService {
 
         int[] counts = tx.execute(status -> {
             Map<Long, FootballMatch> existing = new HashMap<>();
-            for (FootballMatch m : matches.findByExternalIdIn(new ArrayList<>(mapped.keySet()))) {
+            for (FootballMatch m : matches.findBySourceAndExternalIdIn(MatchSource.FOOTBALL_DATA,
+                    new ArrayList<>(mapped.keySet()))) {
                 existing.put(m.getExternalId(), m);
             }
             Competition ref = competitions.getReferenceById(competitionId);
@@ -136,7 +138,7 @@ public class MatchSyncService {
                         skipped++;
                         continue;
                     }
-                    match = new FootballMatch(m.externalId());
+                    match = new FootballMatch(m.externalId(), MatchSource.FOOTBALL_DATA);
                     match.setCompetition(ref);
                     created++;
                 } else {

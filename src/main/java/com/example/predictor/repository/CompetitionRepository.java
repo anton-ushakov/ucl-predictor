@@ -13,5 +13,8 @@ public interface CompetitionRepository extends JpaRepository<Competition, Long> 
     /** Турниры, матчи которых загружаются из источника. */
     List<Competition> findBySyncedTrueAndEnabledTrueOrderBySortOrderAsc();
 
+    /** Турниры одного источника, которые загружаются сами. */
+    List<Competition> findBySourceAndSyncedTrueAndEnabledTrueOrderBySortOrderAsc(String source);
+
     Optional<Competition> findByCode(String code);
 }

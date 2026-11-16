@@ -85,6 +85,10 @@ public class FootballMatch {
     @Column(length = 20)
     private String duration;
 
+    /** Откуда приехал матч: FOOTBALL_DATA или API_FOOTBALL. У ручных матчей пусто. */
+    @Column(length = 20)
+    private String source;
+
     /** Счёт идущего матча. Только для показа: баллы начисляются по сыгранному. */
     @Column(name = "live_home")
     private Integer liveHome;
@@ -96,6 +100,11 @@ public class FootballMatch {
     }
 
     public FootballMatch(Long externalId) {
+        this(externalId, "FOOTBALL_DATA");
+    }
+
+    public FootballMatch(Long externalId, String source) {
+        this.source = source;
         this.externalId = externalId;
     }
 
@@ -238,6 +247,7 @@ public class FootballMatch {
     }
 
     /** Текущий счёт идущего матча: только для показа, баллы по нему не считаются. */
+    public String getSource() { return source; }
     public Integer getLiveHome() { return liveHome; }
     public Integer getLiveAway() { return liveAway; }
 

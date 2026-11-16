@@ -40,9 +40,10 @@ public final class RoundDtos {
     public record MyPrediction(int homeGoals, int awayGoals, Instant savedAt, Integer points) {
     }
 
+    /** joker=true: участник поставил на этот матч джокер, баллы за него удвоены. */
     public record OtherPrediction(Long userId, String username, String badge,
                                   int homeGoals, int awayGoals,
-                                  Instant savedAt, Integer points) {
+                                  Instant savedAt, Integer points, boolean joker) {
     }
 
     /**
@@ -94,7 +95,8 @@ public final class RoundDtos {
                             boolean canSubmit, int openMatches, String submitWarning,
                             boolean standingsFinal, List<StandingRow> standings,
                             List<String> buyers, List<String> receivers, List<String> notParticipated,
-                            int pendingDecisions, int decisionsForMe, String note) {
+                            int pendingDecisions, int decisionsForMe, String note,
+                            boolean jokerEnabled, Long jokerMatchId) {
     }
 
     /**

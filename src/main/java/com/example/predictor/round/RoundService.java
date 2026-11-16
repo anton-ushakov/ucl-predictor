@@ -71,14 +71,17 @@ public class RoundService {
     private final ScoreDecisionService decisionService;
     private final RoundMatches roundMatches;
     private final TeamNamesService teamNames;
+    private final JokerService jokerService;
 
     public RoundService(GroupAccess access, RulesService rulesService,
                         PredictionRepository predictions, RoundResultRepository results,
                         GroupMemberRepository members, AppUserRepository users, AppTime time,
                         ScoreDecisionService decisionService, RoundMatches roundMatches,
+                        JokerService jokerService,
                         TeamNamesService teamNames) {
         this.teamNames = teamNames;
         this.roundMatches = roundMatches;
+        this.jokerService = jokerService;
         this.access = access;
         this.rulesService = rulesService;
         this.predictions = predictions;
@@ -199,6 +202,9 @@ public class RoundService {
             plainNames.put(gm.getUser().getId(), label.display());
         }
 
+        // джокеры тура: userId → matchId. Баллы за этот матч считаются вдвойне
+        Map<Long, Long> jokers = jokerService.forRound(groupId, week);
+
         List<Prediction> all = predictions.findForRound(groupId, week);
         Map<Long, List<Prediction>> byMatch = new HashMap<>();
         for (Prediction p : all) {
@@ -250,14 +256,16 @@ public class RoundService {
                 for (Prediction p : sorted) {
                     if (!p.getUser().getId().equals(me)) {
                         UserLabel who = names.getOrDefault(p.getUser().getId(), UserLabel.UNKNOWN);
+                        boolean hisJoker = m.getId().equals(jokers.get(p.getUser().getId()));
                         others.add(new OtherPrediction(p.getUser().getId(), who.username(), who.badge(),
                                 p.getHomeGoals(), p.getAwayGoals(), p.getCreatedAt(),
-                                pointsFor(m, p, info, rules.scoring())));
+                                pointsFor(m, p, info, rules.scoring(), hisJoker), hisJoker));
                     }
                 }
             }
             MyPrediction myView = mine == null ? null : new MyPrediction(
-                    mine.getHomeGoals(), mine.getAwayGoals(), mine.getCreatedAt(), pointsFor(m, mine, info, rules.scoring()));
+                    mine.getHomeGoals(), mine.getAwayGoals(), mine.getCreatedAt(),
+                    pointsFor(m, mine, info, rules.scoring(), m.getId().equals(jokers.get(me))));
 
             ScoreDetail detail = m.getHomeScore() == null ? null : new ScoreDetail(
                     m.getHomeScore(), m.getAwayScore(), m.getExtraHome(), m.getExtraAway(),
@@ -287,7 +295,7 @@ public class RoundService {
                         r.getGoalDiffHits(), r.getGoalError(), r.isWinner(), r.isLoser()));
             }
         } else {
-            standings = provisional(weekMatches, memberList, all, rules, names, infos);
+            standings = provisional(weekMatches, memberList, all, rules, names, infos, jokers);
         }
 
         List<String> buyers = new ArrayList<>();
@@ -334,12 +342,14 @@ public class RoundService {
                         rules.scoring().exactScorePoints(), rules.scoring().goalDiffPoints(),
                         rules.scoring().outcomePoints(), rules.scoring().describe(), frozen),
                 views, canSubmit, open, submitWarning(rules.submissionMode()), finalized, standings, buyers, receivers,
-                notParticipated, ScoreDecisionService.countPending(infos.values()), decisionsForMe, note);
+                notParticipated, ScoreDecisionService.countPending(infos.values()), decisionsForMe, note,
+                group.isJokerEnabled(), jokers.get(me));
     }
 
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,
                                           List<Prediction> all, Rules rules, Map<Long, UserLabel> names,
-                                          Map<Long, ScoreDecisionService.Info> infos) {
+                                          Map<Long, ScoreDecisionService.Info> infos,
+                                          Map<Long, Long> jokers) {
         List<StandingsCalculator.FinishedMatch> finished = new ArrayList<>();
         for (FootballMatch m : weekMatches) {
             ScoreDecisionService.Info info = infos.get(m.getId());
@@ -360,7 +370,7 @@ public class RoundService {
         }
         List<Long> participants = RoundParticipants.select(toMembers(memberList), predictors);
         List<StandingsCalculator.Row> rows = StandingsCalculator.calculate(
-                participants, finished, guesses, rules.tiebreakers(), rules.scoring());
+                participants, finished, guesses, rules.tiebreakers(), rules.scoring(), jokers);
 
         List<StandingRow> result = new ArrayList<>();
         for (StandingsCalculator.Row r : rows) {
@@ -452,12 +462,13 @@ public class RoundService {
     // ------------------------------------------------------------------ вспомогательное
 
     private static Integer pointsFor(FootballMatch m, Prediction p, ScoreDecisionService.Info info,
-                                     Scoring scoring) {
+                                     Scoring scoring, boolean joker) {
         if (!info.kind().counted()) {
             return null;
         }
-        return scoring.points(p.getHomeGoals(), p.getAwayGoals(),
+        int points = scoring.points(p.getHomeGoals(), p.getAwayGoals(),
                 m.scoreHome(info.basis()), m.scoreAway(info.basis()));
+        return joker ? points * 2 : points;
     }
 
     static List<RoundParticipants.Member> toMembers(List<GroupMember> list) {

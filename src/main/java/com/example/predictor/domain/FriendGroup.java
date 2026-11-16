@@ -68,10 +68,15 @@ public class FriendGroup {
     @Column(name = "use_russian_names", nullable = false)
     private boolean useRussianNames = true;
 
+    /** Разрешён ли джокер: один матч тура с удвоенными баллами. */
+    @Column(name = "joker_enabled", nullable = false)
+    private boolean jokerEnabled = false;
+
     public void changeSettings(int lockMinutesBefore, List<Tiebreaker> tiebreakerList, RevealMode revealMode,
                                ScoreBasis scoreBasis, SubmissionMode submissionMode, Scoring scoring,
-                               boolean useRussianNames) {
+                               boolean useRussianNames, boolean jokerEnabled) {
         this.useRussianNames = useRussianNames;
+        this.jokerEnabled = jokerEnabled;
         this.submissionMode = submissionMode;
         this.exactScorePoints = scoring.exactScorePoints();
         this.goalDiffPoints = scoring.goalDiffPoints();
@@ -95,6 +100,11 @@ public class FriendGroup {
         return new ScoreBasis(countExtraTime, countPenalties);
     }
 
+    /** Переименование группы владельцем. */
+    public void rename(String newName) {
+        this.name = newName;
+    }
+
     public void changeInviteCode(String newCode) {
         this.inviteCode = newCode;
     }
@@ -111,4 +121,5 @@ public class FriendGroup {
     public String getTiebreakers() { return tiebreakers; }
     public RevealMode getRevealMode() { return revealMode; }
     public boolean isUseRussianNames() { return useRussianNames; }
+    public boolean isJokerEnabled() { return jokerEnabled; }
 }

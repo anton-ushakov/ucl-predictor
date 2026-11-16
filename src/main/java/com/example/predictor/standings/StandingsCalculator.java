@@ -50,6 +50,17 @@ public final class StandingsCalculator {
     public static List<Row> calculate(Collection<Long> participants, List<FinishedMatch> matches,
                                       Collection<Guess> guesses, List<Tiebreaker> tiebreakers,
                                       Scoring scoring) {
+        return calculate(participants, matches, guesses, tiebreakers, scoring, Map.of());
+    }
+
+    /**
+     * То же, но с джокерами: userId → matchId, баллы за этот матч считаются вдвойне.
+     * Дополнительные показатели (точные счета, ошибка по голам) джокер не меняет:
+     * он про риск в баллах, а не про меткость.
+     */
+    public static List<Row> calculate(Collection<Long> participants, List<FinishedMatch> matches,
+                                      Collection<Guess> guesses, List<Tiebreaker> tiebreakers,
+                                      Scoring scoring, Map<Long, Long> jokers) {
         Map<Long, Map<Long, Guess>> byUser = new HashMap<>();
         for (Guess g : guesses) {
             byUser.computeIfAbsent(g.userId(), k -> new HashMap<>()).put(g.matchId(), g);
@@ -71,7 +82,8 @@ public final class StandingsCalculator {
                     continue;
                 }
                 Hit h = Scoring.hit(g.homeGoals(), g.awayGoals(), m.homeScore(), m.awayScore());
-                points += scoring.points(h);
+                boolean joker = Long.valueOf(m.matchId()).equals(jokers.get(userId));
+                points += scoring.points(h) * (joker ? 2 : 1);
                 if (h == Hit.EXACT) {
                     exact++;
                 } else if (h != Hit.MISS) {

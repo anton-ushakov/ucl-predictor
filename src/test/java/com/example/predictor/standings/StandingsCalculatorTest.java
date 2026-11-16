@@ -159,4 +159,30 @@ class StandingsCalculatorTest {
         assertEquals(2, row(rows, 2).place());
         assertEquals(2, row(rows, 3).place());
     }
+    @Test
+    void jokerDoublesPointsOfOneMatch() {
+        // user 1 угадал оба счёта: 3 + 3 = 6, а с джокером на втором матче 3 + 6 = 9
+        List<Guess> guesses = List.of(
+                g(1, 1, 2, 1, 0), g(1, 2, 0, 0, 0),
+                g(2, 1, 2, 1, 0), g(2, 2, 0, 0, 0));
+        List<Row> rows = StandingsCalculator.calculate(List.of(1L, 2L), matches, guesses,
+                List.of(), Scoring.DEFAULT, java.util.Map.of(1L, 2L));
+
+        assertEquals(9, row(rows, 1).points());
+        assertEquals(6, row(rows, 2).points());
+        // меткость джокер не меняет: точных счетов по-прежнему два
+        assertEquals(2, row(rows, 1).exactScores());
+        assertTrue(row(rows, 1).winner());
+    }
+
+    @Test
+    void jokerOnMissedMatchGivesNothing() {
+        // удваивать нечего: за промах и так ноль
+        List<Guess> guesses = List.of(g(1, 1, 0, 3, 0), g(1, 2, 0, 0, 0));
+        List<Row> rows = StandingsCalculator.calculate(List.of(1L), matches, guesses,
+                List.of(), Scoring.DEFAULT, java.util.Map.of(1L, 1L));
+
+        assertEquals(3, row(rows, 1).points());
+    }
+
 }

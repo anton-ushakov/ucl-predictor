@@ -45,7 +45,8 @@ public class GroupService {
                               boolean countExtraTime, boolean countPenalties,
                               SubmissionMode submissionMode,
                               int exactScorePoints, int goalDiffPoints, int outcomePoints,
-                              String scoringDescription, boolean useRussianNames) {
+                              String scoringDescription, boolean useRussianNames,
+                              boolean jokerEnabled) {
     }
 
     /**
@@ -140,7 +141,8 @@ public class GroupService {
                 g.tiebreakerList().stream().map(Enum::name).toList(), g.getRevealMode(),
                 g.scoreBasis().extraTime(), g.scoreBasis().penalties(), g.getSubmissionMode(),
                 g.scoring().exactScorePoints(), g.scoring().goalDiffPoints(),
-                g.scoring().outcomePoints(), g.scoring().describe(), g.isUseRussianNames());
+                g.scoring().outcomePoints(), g.scoring().describe(), g.isUseRussianNames(),
+                g.isJokerEnabled());
         List<OptionDto> tiebreakerOptions = Arrays.stream(Tiebreaker.values())
                 .map(t -> new OptionDto(t.name(), t.getDescription())).toList();
         List<OptionDto> revealOptions = Arrays.stream(RevealMode.values())
@@ -156,7 +158,8 @@ public class GroupService {
     public SettingsDto updateSettings(AppUser current, Long groupId, int lockMinutesBefore,
                                       List<String> tiebreakerNames, RevealMode revealMode,
                                       ScoreBasis scoreBasis, SubmissionMode submissionMode,
-                                      Scoring scoring, boolean useRussianNames) {
+                                      Scoring scoring, boolean useRussianNames,
+                                      boolean jokerEnabled) {
         Membership ms = access.requireOwner(current, groupId);
         FriendGroup group = ms.group();
 
@@ -179,12 +182,33 @@ public class GroupService {
         }
 
         group.changeSettings(lockMinutesBefore, tiebreakers, revealMode, scoreBasis, submissionMode,
-                scoring, useRussianNames);
+                scoring, useRussianNames, jokerEnabled);
         groups.save(group);
         return new SettingsDto(lockMinutesBefore, tiebreakers.stream().map(Enum::name).toList(), revealMode,
                 scoreBasis.extraTime(), scoreBasis.penalties(), submissionMode,
                 scoring.exactScorePoints(), scoring.goalDiffPoints(), scoring.outcomePoints(),
-                scoring.describe(), useRussianNames);
+                scoring.describe(), useRussianNames, jokerEnabled);
+    }
+
+    /**
+     * Переименование группы. Доступно владельцу: название видят все участники,
+     * поэтому менять его по своему вкусу могут не все.
+     */
+    @Transactional
+    public GroupDto rename(AppUser current, Long groupId, String name) {
+        Membership ms = access.requireOwner(current, groupId);
+        String clean = name == null ? "" : name.trim();
+        if (clean.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Название не может быть пустым");
+        }
+        if (clean.length() > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Название слишком длинное");
+        }
+        FriendGroup group = ms.group();
+        group.rename(clean);
+        groups.save(group);
+        return new GroupDto(group.getId(), group.getName(), visibleInviteCode(group),
+                (int) members.countInGroup(group.getId()), GroupRole.OWNER);
     }
 
     /**

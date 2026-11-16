@@ -49,12 +49,15 @@ public class RoundFinalizer {
     private final TransactionTemplate tx;
     private final ScoreDecisionService decisionService;
     private final DebtService debtService;
+    private final JokerService jokerService;
 
     public RoundFinalizer(PredictionRepository predictions, RoundMatches roundMatches,
                           RoundResultRepository results, FriendGroupRepository groups,
                           GroupMemberRepository members, RulesService rulesService, AppTime time,
                           PlatformTransactionManager transactionManager,
-                          ScoreDecisionService decisionService, DebtService debtService) {
+                          ScoreDecisionService decisionService, DebtService debtService,
+                          JokerService jokerService) {
+        this.jokerService = jokerService;
         this.debtService = debtService;
         this.predictions = predictions;
         this.roundMatches = roundMatches;
@@ -141,7 +144,8 @@ public class RoundFinalizer {
         }
 
         List<StandingsCalculator.Row> rows = StandingsCalculator.calculate(
-                participants, finished, guesses, rules.tiebreakers(), rules.scoring());
+                participants, finished, guesses, rules.tiebreakers(), rules.scoring(),
+                jokerService.forRound(groupId, week));
 
         String tiebreakersCsv = Tiebreaker.toCsv(rules.tiebreakers());
         Instant now = Instant.now();

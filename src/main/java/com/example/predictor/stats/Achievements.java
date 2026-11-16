@@ -28,10 +28,7 @@ public final class Achievements {
     private Achievements() {
     }
 
-    public static List<Achievement> of(List<RoundLine> rounds, int shawarmaBought,
-                                       int shawarmaReceived) {
-        int played = rounds.size();
-        int totalPoints = 0;
+    public static List<Achievement> of(List<RoundLine> rounds) {
         int totalExact = 0;
         int bestPoints = 0;
         int bestExact = 0;
@@ -42,7 +39,6 @@ public final class Achievements {
         int bestCleanStreak = 0;
         int cleanStreak = 0;
         for (RoundLine r : rounds) {
-            totalPoints += r.points();
             totalExact += r.exactScores();
             bestPoints = Math.max(bestPoints, r.points());
             bestExact = Math.max(bestExact, r.exactScores());
@@ -69,15 +65,10 @@ public final class Achievements {
         list.add(make("BACK_TO_BACK", "Две подряд", "Выиграть два тура подряд", bestWinStreak, 2));
         list.add(make("SNIPER", "Снайпер", "Три точных счёта в одном туре", bestExact, 3));
         list.add(make("TEN_IN_ROUND", "Десятка", "Набрать 10 баллов за тур", bestPoints, 10));
-        list.add(make("HUNDRED", "Сотня", "Набрать 100 баллов всего", totalPoints, 100));
         list.add(make("EXACT_20", "Меткий", "Угадать 20 точных счетов", totalExact, 20));
-        list.add(make("ROUNDS_10", "Завсегдатай", "Сыграть 10 туров", played, 10));
-        list.add(make("ROUNDS_25", "Ветеран", "Сыграть 25 туров", played, 25));
         list.add(make("CLEAN_4", "Месяц без шаурмы", "Четыре тура подряд не последним",
                 bestCleanStreak, 4));
         list.add(make("ZERO", "Бывает", "Пройти тур, не набрав ни одного балла", zeroRounds, 1));
-        list.add(make("FEEDER", "Кормилец", "Купить шаурму пять раз", shawarmaBought, 5));
-        list.add(make("WELL_FED", "Сытый", "Получить шаурму пять раз", shawarmaReceived, 5));
         return list;
     }
 

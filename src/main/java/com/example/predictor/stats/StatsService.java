@@ -120,7 +120,7 @@ public class StatsService {
         String note = rounds == 0
                 ? "Статистика появится, когда подведут итоги первого тура."
                 : "Считается по завершённым турам этой группы.";
-        List<Achievements.Achievement> achievements = Achievements.of(lines, bought, received);
+        List<Achievements.Achievement> achievements = Achievements.of(lines);
         int earned = 0;
         for (Achievements.Achievement a : achievements) {
             if (a.earned()) {

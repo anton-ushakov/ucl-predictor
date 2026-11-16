@@ -45,7 +45,11 @@ public class HistoryService {
     private final RoundResultRepository results;
     private final GroupMemberRepository members;
 
-    public HistoryService(GroupAccess access, RoundResultRepository results, GroupMemberRepository members) {
+    private final SeasonService seasons;
+
+    public HistoryService(GroupAccess access, RoundResultRepository results,
+                          GroupMemberRepository members, SeasonService seasons) {
+        this.seasons = seasons;
         this.access = access;
         this.results = results;
         this.members = members;
@@ -90,12 +94,20 @@ public class HistoryService {
     }
 
     @Transactional(readOnly = true)
-    public List<LeaderRow> leaderboard(AppUser user, Long groupId) {
+    public List<LeaderRow> leaderboard(AppUser user, Long groupId, Long seasonId) {
         access.require(user, groupId);
         Map<Long, UserLabel> names = names(groupId);
+        // зачёт считается за выбранный сезон: туры до его начала в сумму не идут
+        SeasonService.Range range = seasons.rangeOf(groupId, seasonId);
 
         List<LeaderboardCalculator.ResultLine> lines = new ArrayList<>();
         for (RoundResult r : results.findByGroupIdOrderByRoundWeekDescPlaceAscUserIdAsc(groupId)) {
+            if (range.from() != null && r.getRoundWeek().isBefore(range.from())) {
+                continue;
+            }
+            if (range.to() != null && r.getRoundWeek().isAfter(range.to())) {
+                continue;
+            }
             lines.add(new LeaderboardCalculator.ResultLine(r.getUserId(), r.getPoints(), r.getExactScores(),
                     r.isWinner(), r.isLoser()));
         }

@@ -27,9 +27,11 @@ public class RoundController {
     private final RoundService rounds;
     private final HistoryService history;
     private final ScoreDecisionService decisions;
+    private final SeasonService seasons;
 
     public RoundController(AuthService auth, RoundService rounds, HistoryService history,
-                           ScoreDecisionService decisions) {
+                           ScoreDecisionService decisions, SeasonService seasons) {
+        this.seasons = seasons;
         this.decisions = decisions;
         this.auth = auth;
         this.rounds = rounds;
@@ -98,11 +100,48 @@ public class RoundController {
         return history.history(user, groupId);
     }
 
-    /** Общий зачёт группы по завершённым турам. */
+    /**
+     * Общий зачёт группы по завершённым турам. seasonId: не указан — текущий сезон,
+     * 0 — за всё время, иначе выбранный сезон.
+     */
     @GetMapping("/leaderboard")
     public List<LeaderRow> leaderboard(@RequestHeader(value = "Authorization", required = false) String authorization,
-                                       @PathVariable("groupId") Long groupId) {
+                                       @PathVariable("groupId") Long groupId,
+                                       @RequestParam(value = "seasonId", required = false) Long seasonId) {
         AppUser user = auth.authenticate(authorization);
-        return history.leaderboard(user, groupId);
+        return history.leaderboard(user, groupId, seasonId);
+    }
+
+    /** Сезоны группы: по ним режется общий зачёт. */
+    @GetMapping("/seasons")
+    public SeasonService.SeasonsView seasons(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId) {
+        AppUser user = auth.authenticate(authorization);
+        return seasons.view(user, groupId);
+    }
+
+    /** Начать новый сезон с текущей недели. Только владелец. */
+    @PostMapping("/seasons")
+    public SeasonService.SeasonsView startSeason(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @Valid @RequestBody SeasonRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        return seasons.start(user, groupId, request.name());
+    }
+
+    /** Убрать сезон. Туры и итоги остаются, меняется только разбивка зачёта. */
+    @DeleteMapping("/seasons/{seasonId}")
+    public SeasonService.SeasonsView removeSeason(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("seasonId") Long seasonId) {
+        AppUser user = auth.authenticate(authorization);
+        return seasons.remove(user, groupId, seasonId);
+    }
+
+    public record SeasonRequest(@jakarta.validation.constraints.NotBlank
+                                @jakarta.validation.constraints.Size(max = 60) String name) {
     }
 }

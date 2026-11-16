@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +30,8 @@ public class StatsService {
     public record StatsView(int rounds, int totalPoints, String averagePoints, int exactScores,
                             int outcomeHits, int wins, int losses, LocalDate bestWeek,
                             int bestPoints, int predictions, String favouriteScore,
-                            int shawarmaBought, int shawarmaReceived, int debtsOpen, String note) {
+                            int shawarmaBought, int shawarmaReceived, int debtsOpen, String note,
+                            List<Achievements.Achievement> achievements, int earned) {
     }
 
     private final GroupAccess access;
@@ -50,6 +52,8 @@ public class StatsService {
         access.require(user, groupId);
         Long me = user.getId();
 
+        // итоги туров по порядку: по ним считаются и числа, и достижения
+        List<Achievements.RoundLine> lines = new ArrayList<>();
         int rounds = 0;
         int points = 0;
         int exact = 0;
@@ -76,7 +80,11 @@ public class StatsService {
                 bestWeek = r.getRoundWeek();
                 bestPoints = r.getPoints();
             }
+            lines.add(new Achievements.RoundLine(r.getPoints(), r.getExactScores(),
+                    r.isWinner(), r.isLoser()));
         }
+        // в базе туры идут от свежих к старым, а серии считаются от старых к свежим
+        java.util.Collections.reverse(lines);
 
         List<Object[]> goals = predictions.findGoalsOfUser(groupId, me);
         Map<String, Integer> byScore = new HashMap<>();
@@ -112,7 +120,15 @@ public class StatsService {
         String note = rounds == 0
                 ? "Статистика появится, когда подведут итоги первого тура."
                 : "Считается по завершённым турам этой группы.";
+        List<Achievements.Achievement> achievements = Achievements.of(lines, bought, received);
+        int earned = 0;
+        for (Achievements.Achievement a : achievements) {
+            if (a.earned()) {
+                earned++;
+            }
+        }
         return new StatsView(rounds, points, average, exact, outcome, wins, losses, bestWeek,
-                bestPoints, goals.size(), favourite, bought, received, open, note);
+                bestPoints, goals.size(), favourite, bought, received, open, note,
+                achievements, earned);
     }
 }

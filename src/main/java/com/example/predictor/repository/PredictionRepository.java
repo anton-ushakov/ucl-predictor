@@ -42,6 +42,11 @@ public interface PredictionRepository extends JpaRepository<Prediction, Long> {
                                       @Param("from") LocalDate from,
                                       @Param("to") LocalDate to);
 
+    /** Все прогнозы участника в группе: голы хозяев и гостей. Для личной статистики. */
+    @Query("select p.homeGoals, p.awayGoals from Prediction p "
+            + "where p.group.id = :groupId and p.user.id = :userId")
+    List<Object[]> findGoalsOfUser(@Param("groupId") Long groupId, @Param("userId") Long userId);
+
     /** Есть ли в группе хотя бы один прогноз на этот матч. */
     @Query("select count(p) > 0 from Prediction p where p.group.id = :groupId and p.match.id = :matchId")
     boolean existsForMatch(@Param("groupId") Long groupId, @Param("matchId") Long matchId);

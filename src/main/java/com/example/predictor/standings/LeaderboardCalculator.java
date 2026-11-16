@@ -24,6 +24,11 @@ public final class LeaderboardCalculator {
     }
 
     public static List<Row> calculate(List<ResultLine> lines) {
+        return calculate(lines, Map.of());
+    }
+
+    /** bonus — баллы за вопросы турнира: userId → сумма. Складываются с турами. */
+    public static List<Row> calculate(List<ResultLine> lines, Map<Long, Integer> bonus) {
         // rounds, points, exact, wins, losses
         Map<Long, int[]> acc = new LinkedHashMap<>();
         for (ResultLine l : lines) {
@@ -39,10 +44,16 @@ public final class LeaderboardCalculator {
             }
         }
 
+        // у кого есть только баллы за вопросы, тот тоже должен оказаться в таблице
+        for (Long userId : bonus.keySet()) {
+            acc.computeIfAbsent(userId, k -> new int[5]);
+        }
+
         List<Row> rows = new ArrayList<>();
         for (Map.Entry<Long, int[]> e : acc.entrySet()) {
             int[] a = e.getValue();
-            rows.add(new Row(e.getKey(), 0, a[0], a[1], a[2], a[3], a[4]));
+            rows.add(new Row(e.getKey(), 0, a[0], a[1] + bonus.getOrDefault(e.getKey(), 0),
+                    a[2], a[3], a[4]));
         }
 
         Comparator<Row> byScore = (x, y) -> {

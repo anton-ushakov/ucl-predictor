@@ -48,9 +48,12 @@ public class HistoryService {
     private final GroupMemberRepository members;
 
     private final SeasonService seasons;
+    private final com.example.predictor.questions.QuestionService questions;
 
     public HistoryService(GroupAccess access, RoundResultRepository results,
-                          GroupMemberRepository members, SeasonService seasons) {
+                          GroupMemberRepository members, SeasonService seasons,
+                          com.example.predictor.questions.QuestionService questions) {
+        this.questions = questions;
         this.seasons = seasons;
         this.access = access;
         this.results = results;
@@ -113,7 +116,8 @@ public class HistoryService {
             lines.add(new LeaderboardCalculator.ResultLine(r.getUserId(), r.getPoints(), r.getExactScores(),
                     r.isWinner(), r.isLoser()));
         }
-        List<LeaderboardCalculator.Row> rows = LeaderboardCalculator.calculate(lines);
+        List<LeaderboardCalculator.Row> rows = LeaderboardCalculator.calculate(lines,
+                questions.bonusPoints(groupId, range.from(), range.to()));
         Map<Long, Integer> wins = new HashMap<>();
         for (LeaderboardCalculator.Row r : rows) {
             wins.put(r.userId(), r.wins());

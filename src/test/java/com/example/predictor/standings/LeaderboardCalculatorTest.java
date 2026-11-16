@@ -54,4 +54,28 @@ class LeaderboardCalculatorTest {
     void noRoundsGivesEmptyBoard() {
         assertTrue(LeaderboardCalculator.calculate(List.of()).isEmpty());
     }
+    @Test
+    void questionBonusAddsToTheSeasonTotal() {
+        // 1 набрал 6 за туры, 2 набрал 4, но угадал вопрос на 5 баллов и вышел вперёд
+        List<ResultLine> lines = List.of(
+                new ResultLine(1L, 6, 2, true, false),
+                new ResultLine(2L, 4, 1, false, true));
+        List<Row> rows = LeaderboardCalculator.calculate(lines, java.util.Map.of(2L, 5));
+
+        Row first = rows.get(0);
+        assertEquals(2L, first.userId());
+        assertEquals(9, first.totalPoints());
+        assertEquals(1, first.place());
+    }
+
+    @Test
+    void bonusAloneIsEnoughToAppearInTheTable() {
+        List<Row> rows = LeaderboardCalculator.calculate(List.of(), java.util.Map.of(7L, 3));
+
+        assertEquals(1, rows.size());
+        assertEquals(7L, rows.get(0).userId());
+        assertEquals(3, rows.get(0).totalPoints());
+        assertEquals(0, rows.get(0).rounds());
+    }
+
 }

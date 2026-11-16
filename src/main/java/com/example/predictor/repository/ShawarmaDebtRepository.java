@@ -10,6 +10,12 @@ public interface ShawarmaDebtRepository extends JpaRepository<ShawarmaDebt, Long
 
     List<ShawarmaDebt> findByGroupIdOrderByRoundWeekDescIdAsc(Long groupId);
 
+    /** Неотданные долги участника во всех его группах. */
+    List<ShawarmaDebt> findByDebtorIdAndSettledAtIsNull(Long debtorId);
+
+    /** Неотданные долги перед участником. */
+    List<ShawarmaDebt> findByCreditorIdAndSettledAtIsNull(Long creditorId);
+
     boolean existsByGroupIdAndRoundWeekAndDebtorIdAndCreditorId(
             Long groupId, LocalDate roundWeek, Long debtorId, Long creditorId);
 }

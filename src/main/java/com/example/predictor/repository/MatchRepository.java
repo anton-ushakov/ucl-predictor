@@ -29,6 +29,15 @@ public interface MatchRepository extends JpaRepository<FootballMatch, Long> {
                        @Param("from") java.time.Instant from,
                        @Param("to") java.time.Instant to);
 
+    /** Когда начнётся первый загруженный матч недели из промежутка. null — таких нет. */
+    @Query("select min(m.kickoffAt) from FootballMatch m where m.roundWeek = :week "
+            + "and m.ownerGroupId is null and m.status = :status "
+            + "and m.kickoffAt between :from and :to")
+    java.time.Instant firstKickoff(@Param("week") LocalDate week,
+                                   @Param("status") com.example.predictor.domain.MatchStatus status,
+                                   @Param("from") java.time.Instant from,
+                                   @Param("to") java.time.Instant to);
+
     /** Оригинальные названия команд-хозяев во всех матчах, доступных группе. */
     @Query("select distinct m.homeTeam from FootballMatch m "
             + "where m.ownerGroupId is null or m.ownerGroupId = :groupId")

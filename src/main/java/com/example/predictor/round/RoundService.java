@@ -98,6 +98,8 @@ public class RoundService {
     public List<RoundSummary> rounds(AppUser user, Long groupId) {
         Membership ms = access.require(user, groupId);
         FriendGroup group = ms.group();
+        // собирать тур может не каждый: без этого права кнопка выбора матчей не нужна
+        boolean canSelect = GroupAccess.canSelectMatches(ms);
         LocalDate from = time.currentWeek().minusWeeks(HISTORY_WEEKS_BACK);
         LocalDate to = time.lastPredictableWeek();
 
@@ -160,7 +162,7 @@ public class RoundService {
                             weeksWithPredictions.contains(week)),
                     e.getValue().size(), predicted, open, e.getValue().get(0).getKickoffAt(),
                     !week.isBefore(time.currentWeek()) && !week.isAfter(to),
-                    ready, memberList.size()));
+                    ready, memberList.size(), canSelect));
         }
 
         // Текущая и следующая недели показываются всегда, даже если владелец ещё не выбрал матчи:
@@ -168,7 +170,7 @@ public class RoundService {
         for (LocalDate week = time.currentWeek(); !week.isAfter(to); week = week.plusWeeks(1)) {
             if (!byWeek.containsKey(week)) {
                 list.add(new RoundSummary(week, RoundStatus.UPCOMING, 0, 0, 0, null, true,
-                        0, memberList.size()));
+                        0, memberList.size(), canSelect));
             }
         }
         list.sort(Comparator.comparing(RoundSummary::week).reversed());

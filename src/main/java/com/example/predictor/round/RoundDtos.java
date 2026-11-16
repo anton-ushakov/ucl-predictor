@@ -105,7 +105,7 @@ public final class RoundDtos {
      */
     public record RoundSummary(LocalDate week, RoundStatus status, int matches, int predictedByMe,
                                int openForMe, Instant firstKickoff, boolean selectable,
-                               int membersPredicted, int memberCount) {
+                               int membersPredicted, int memberCount, boolean canSelect) {
     }
 
     public record Entry(@NotNull Long matchId,

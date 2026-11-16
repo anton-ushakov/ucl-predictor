@@ -72,16 +72,18 @@ public class RoundService {
     private final RoundMatches roundMatches;
     private final TeamNamesService teamNames;
     private final JokerService jokerService;
+    private final LeaderService leaderService;
 
     public RoundService(GroupAccess access, RulesService rulesService,
                         PredictionRepository predictions, RoundResultRepository results,
                         GroupMemberRepository members, AppUserRepository users, AppTime time,
                         ScoreDecisionService decisionService, RoundMatches roundMatches,
-                        JokerService jokerService,
+                        JokerService jokerService, LeaderService leaderService,
                         TeamNamesService teamNames) {
         this.teamNames = teamNames;
         this.roundMatches = roundMatches;
         this.jokerService = jokerService;
+        this.leaderService = leaderService;
         this.access = access;
         this.rulesService = rulesService;
         this.predictions = predictions;
@@ -206,6 +208,8 @@ public class RoundService {
 
         // джокеры тура: userId → matchId. Баллы за этот матч считаются вдвойне
         Map<Long, Long> jokers = jokerService.forRound(groupId, week);
+        // жёлтая майка: у кого больше всего побед в текущем сезоне
+        Set<Long> leaders = leaderService.leaders(groupId);
 
         List<Prediction> all = predictions.findForRound(groupId, week);
         Map<Long, List<Prediction>> byMatch = new HashMap<>();
@@ -262,7 +266,8 @@ public class RoundService {
                         boolean hisJoker = m.getId().equals(jokers.get(p.getUser().getId()));
                         others.add(new OtherPrediction(p.getUser().getId(), who.username(), who.badge(),
                                 p.getHomeGoals(), p.getAwayGoals(), p.getCreatedAt(),
-                                pointsFor(m, p, info, rules.scoring(), hisJoker), hisJoker));
+                                pointsFor(m, p, info, rules.scoring(), hisJoker), hisJoker,
+                                leaders.contains(p.getUser().getId())));
                     }
                 }
             }
@@ -287,7 +292,7 @@ public class RoundService {
                     m.getStage(), m.getMatchday(), m.getStatus(),
                     counted ? m.scoreHome(info.basis()) : null, counted ? m.scoreAway(info.basis()) : null,
                     m.getLiveHome(), m.getLiveAway(),
-                    detail, info.kind().name(), decision, isOpen, locked, forMatch.size(), memberList.size(), myView, visible, others));
+                    detail, summaryOf(forMatch, mine, visible), info.kind().name(), decision, isOpen, locked, forMatch.size(), memberList.size(), myView, visible, others));
         }
 
         // таблица тура: итоговая, если тур подведён, иначе предварительная по сыгранным матчам
@@ -299,10 +304,12 @@ public class RoundService {
                 UserLabel who = names.getOrDefault(r.getUserId(), UserLabel.UNKNOWN);
                 standings.add(new StandingRow(r.getUserId(), who.username(), who.badge(),
                         r.getPlace(), r.getPoints(), 0, r.getExactScores(), r.getOutcomeHits(),
-                        r.getGoalDiffHits(), r.getGoalError(), r.isWinner(), r.isLoser()));
+                        r.getGoalDiffHits(), r.getGoalError(), r.isWinner(), r.isLoser(),
+                        leaders.contains(r.getUserId())));
             }
         } else {
-            standings = provisional(weekMatches, memberList, all, rules, names, infos, jokers);
+            standings = provisional(weekMatches, memberList, all, rules, names, infos, jokers,
+                    leaders);
         }
 
         List<String> buyers = new ArrayList<>();
@@ -356,7 +363,7 @@ public class RoundService {
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,
                                           List<Prediction> all, Rules rules, Map<Long, UserLabel> names,
                                           Map<Long, ScoreDecisionService.Info> infos,
-                                          Map<Long, Long> jokers) {
+                                          Map<Long, Long> jokers, Set<Long> leaders) {
         List<StandingsCalculator.FinishedMatch> finished = new ArrayList<>();
         // идущие матчи считаем отдельно: по ним видно, что будет, «если так и закончится»
         List<StandingsCalculator.FinishedMatch> live = new ArrayList<>();
@@ -401,7 +408,7 @@ public class RoundService {
             int done = settled.getOrDefault(r.userId(), 0);
             result.add(new StandingRow(r.userId(), who.username(), who.badge(), r.place(),
                     done, r.points() - done, r.exactScores(), r.outcomeHits(), r.goalDiffHits(),
-                    r.goalError(), false, false));
+                    r.goalError(), false, false, leaders.contains(r.userId())));
         }
         return result;
     }
@@ -483,6 +490,42 @@ public class RoundService {
     }
 
     // ------------------------------------------------------------------ вспомогательное
+
+    /**
+     * Одной строкой: как поставили остальные. Появляется, когда чужие прогнозы уже открыты,
+     * — иначе это была бы подсказка.
+     */
+    private static String summaryOf(List<Prediction> forMatch, Prediction mine, boolean visible) {
+        if (!visible || forMatch.size() < 2) {
+            return null;
+        }
+        Map<String, Integer> byScore = new LinkedHashMap<>();
+        for (Prediction p : forMatch) {
+            byScore.merge(p.getHomeGoals() + ":" + p.getAwayGoals(), 1, Integer::sum);
+        }
+        String popular = null;
+        int popularCount = 0;
+        for (Map.Entry<String, Integer> e : byScore.entrySet()) {
+            if (e.getValue() > popularCount) {
+                popular = e.getKey();
+                popularCount = e.getValue();
+            }
+        }
+        StringBuilder text = new StringBuilder();
+        if (popularCount > 1) {
+            text.append(popularCount).append(" из ").append(forMatch.size())
+                    .append(" поставили ").append(popular);
+        } else {
+            text.append("Все поставили по-разному");
+        }
+        if (mine != null) {
+            String my = mine.getHomeGoals() + ":" + mine.getAwayGoals();
+            if (byScore.getOrDefault(my, 0) == 1) {
+                text.append(forMatch.size() > 1 ? ", вы единственный с " + my : "");
+            }
+        }
+        return text.toString();
+    }
 
     private static Integer pointsFor(FootballMatch m, Prediction p, ScoreDecisionService.Info info,
                                      Scoring scoring, boolean joker) {

@@ -19,6 +19,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** История завершённых туров и общий зачёт группы. */
 @Service
@@ -36,7 +37,8 @@ public class HistoryService {
                                List<ResultRow> rows, List<String> buyers, List<String> receivers) {
     }
 
-    public record LeaderRow(Long userId, String username, String badge,
+    /** leader=true: жёлтая майка — больше всех выигранных туров в этом зачёте. */
+    public record LeaderRow(Long userId, String username, String badge, boolean leader,
                             int place, int rounds, int totalPoints,
                             int exactScores, int wins, int losses) {
     }
@@ -111,10 +113,18 @@ public class HistoryService {
             lines.add(new LeaderboardCalculator.ResultLine(r.getUserId(), r.getPoints(), r.getExactScores(),
                     r.isWinner(), r.isLoser()));
         }
+        List<LeaderboardCalculator.Row> rows = LeaderboardCalculator.calculate(lines);
+        Map<Long, Integer> wins = new HashMap<>();
+        for (LeaderboardCalculator.Row r : rows) {
+            wins.put(r.userId(), r.wins());
+        }
+        Set<Long> leaders = LeaderService.topOf(wins);
+
         List<LeaderRow> board = new ArrayList<>();
-        for (LeaderboardCalculator.Row r : LeaderboardCalculator.calculate(lines)) {
+        for (LeaderboardCalculator.Row r : rows) {
             UserLabel who = names.getOrDefault(r.userId(), UserLabel.UNKNOWN);
-            board.add(new LeaderRow(r.userId(), who.username(), who.badge(), r.place(), r.rounds(),
+            board.add(new LeaderRow(r.userId(), who.username(), who.badge(),
+                    leaders.contains(r.userId()), r.place(), r.rounds(),
                     r.totalPoints(), r.exactScores(), r.wins(), r.losses()));
         }
         return board;

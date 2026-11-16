@@ -37,7 +37,7 @@ public class GroupService {
 
     /** helper=true: участник может собирать состав тура, когда группа это разрешила. */
     public record MemberDto(Long userId, String username, String badge, GroupRole role,
-                            boolean helper) {
+                            boolean helper, boolean leader) {
     }
 
     /**
@@ -80,10 +80,13 @@ public class GroupService {
     private final AuthModeConfig authMode;
     private final AuthService auth;
     private final PasswordResetRepository passwordResets;
+    private final com.example.predictor.round.LeaderService leaderService;
 
     public GroupService(FriendGroupRepository groups, GroupMemberRepository members,
                         AppUserRepository users, GroupAccess access, AuthModeConfig authMode,
-                        AuthService auth, PasswordResetRepository passwordResets) {
+                        AuthService auth, PasswordResetRepository passwordResets,
+                        com.example.predictor.round.LeaderService leaderService) {
+        this.leaderService = leaderService;
         this.authMode = authMode;
         this.auth = auth;
         this.passwordResets = passwordResets;
@@ -137,9 +140,12 @@ public class GroupService {
     public GroupDetailDto detail(AppUser current, Long groupId) {
         Membership ms = access.require(current, groupId);
         FriendGroup g = ms.group();
+        // жёлтая майка лидера сезона
+        java.util.Set<Long> leaders = leaderService.leaders(groupId);
         List<MemberDto> memberDtos = members.findAllWithUser(g.getId()).stream()
                 .map(m -> new MemberDto(m.getUser().getId(), m.getUser().getUsername(),
-                        m.getUser().getBadge(), m.getRole(), m.isHelper()))
+                        m.getUser().getBadge(), m.getRole(), m.isHelper(),
+                        leaders.contains(m.getUser().getId())))
                 .toList();
         SettingsDto settings = new SettingsDto(g.getLockMinutesBefore(),
                 g.tiebreakerList().stream().map(Enum::name).toList(), g.getRevealMode(),
@@ -210,7 +216,7 @@ public class GroupService {
         member.setHelper(helper);
         members.save(member);
         return new MemberDto(userId, member.getUser().getUsername(), member.getUser().getBadge(),
-                member.getRole(), member.isHelper());
+                member.getRole(), member.isHelper(), false);
     }
 
     /**

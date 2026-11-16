@@ -43,7 +43,8 @@ public final class RoundDtos {
     /** joker=true: участник поставил на этот матч джокер, баллы за него удвоены. */
     public record OtherPrediction(Long userId, String username, String badge,
                                   int homeGoals, int awayGoals,
-                                  Instant savedAt, Integer points, boolean joker) {
+                                  Instant savedAt, Integer points, boolean joker,
+                                  boolean leader) {
     }
 
     /**
@@ -60,6 +61,7 @@ public final class RoundDtos {
                             Instant lockAt, String stage, Integer matchday, MatchStatus status,
                             Integer homeScore, Integer awayScore,
                             Integer liveHome, Integer liveAway, ScoreDetail scoreDetail,
+                            String othersSummary,
                             String counting, ScoreDecisionView scoreDecision,
                             boolean open, boolean locked,
                             int predictedCount, int memberCount, MyPrediction mine,
@@ -90,7 +92,7 @@ public final class RoundDtos {
     public record StandingRow(Long userId, String username, String badge,
                               int place, int points, int livePoints, int exactScores,
                               int outcomeHits, int goalDiffHits, int goalError,
-                              boolean winner, boolean loser) {
+                              boolean winner, boolean loser, boolean leader) {
     }
 
     public record RoundView(LocalDate week, RoundStatus status, RulesDto rules, List<MatchView> matches,

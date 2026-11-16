@@ -185,4 +185,16 @@ class StandingsCalculatorTest {
         assertEquals(3, row(rows, 1).points());
     }
 
+    @Test
+    void liveMatchCountsLikeAnyOtherWhenAsked() {
+        // «если так и закончится»: идущий матч считается тем же способом, что и сыгранный
+        List<Guess> guesses = List.of(g(1, 1, 2, 1, 0), g(2, 1, 0, 0, 0));
+        List<FinishedMatch> onlyFirst = List.of(new FinishedMatch(1, 2, 1));
+        List<Row> rows = StandingsCalculator.calculate(List.of(1L, 2L), onlyFirst, guesses,
+                List.of(), Scoring.DEFAULT);
+
+        assertEquals(3, row(rows, 1).points());
+        assertEquals(0, row(rows, 2).points());
+    }
+
 }

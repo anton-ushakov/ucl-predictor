@@ -225,6 +225,7 @@ public class RoundService {
         int decisionsForMe = 0;
         List<MatchView> views = new ArrayList<>();
         int open = 0;
+        int liveMatches = 0;
         boolean started = false;
         boolean allOver = true;
         for (FootballMatch m : weekMatches) {
@@ -277,11 +278,15 @@ public class RoundService {
                 decisionsForMe++;
             }
             boolean counted = info.kind().counted();
+            if (m.getStatus() == MatchStatus.LIVE && m.getLiveHome() != null) {
+                liveMatches++;
+            }
             views.add(new MatchView(m.getId(), teamLabels.display(m.getHomeTeam()),
                     teamLabels.display(m.getAwayTeam()), m.getHomeCrest(), m.getAwayCrest(),
                     m.getKickoffAt(), lockAt,
                     m.getStage(), m.getMatchday(), m.getStatus(),
                     counted ? m.scoreHome(info.basis()) : null, counted ? m.scoreAway(info.basis()) : null,
+                    m.getLiveHome(), m.getLiveAway(),
                     detail, info.kind().name(), decision, isOpen, locked, forMatch.size(), memberList.size(), myView, visible, others));
         }
 
@@ -293,7 +298,7 @@ public class RoundService {
             for (RoundResult r : finalRows) {
                 UserLabel who = names.getOrDefault(r.getUserId(), UserLabel.UNKNOWN);
                 standings.add(new StandingRow(r.getUserId(), who.username(), who.badge(),
-                        r.getPlace(), r.getPoints(), r.getExactScores(), r.getOutcomeHits(),
+                        r.getPlace(), r.getPoints(), 0, r.getExactScores(), r.getOutcomeHits(),
                         r.getGoalDiffHits(), r.getGoalError(), r.isWinner(), r.isLoser()));
             }
         } else {
@@ -345,7 +350,7 @@ public class RoundService {
                         rules.scoring().outcomePoints(), rules.scoring().describe(), frozen),
                 views, canSubmit, open, submitWarning(rules.submissionMode()), finalized, standings, buyers, receivers,
                 notParticipated, ScoreDecisionService.countPending(infos.values()), decisionsForMe, note,
-                group.isJokerEnabled(), jokers.get(me));
+                group.isJokerEnabled(), jokers.get(me), liveMatches);
     }
 
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,
@@ -353,14 +358,20 @@ public class RoundService {
                                           Map<Long, ScoreDecisionService.Info> infos,
                                           Map<Long, Long> jokers) {
         List<StandingsCalculator.FinishedMatch> finished = new ArrayList<>();
+        // идущие матчи считаем отдельно: по ним видно, что будет, «если так и закончится»
+        List<StandingsCalculator.FinishedMatch> live = new ArrayList<>();
         for (FootballMatch m : weekMatches) {
             ScoreDecisionService.Info info = infos.get(m.getId());
             if (info.kind().counted()) {
                 finished.add(new StandingsCalculator.FinishedMatch(m.getId(),
                         m.scoreHome(info.basis()), m.scoreAway(info.basis())));
+            } else if (m.getStatus() == MatchStatus.LIVE && m.getLiveHome() != null
+                    && m.getLiveAway() != null) {
+                live.add(new StandingsCalculator.FinishedMatch(m.getId(),
+                        m.getLiveHome(), m.getLiveAway()));
             }
         }
-        if (finished.isEmpty()) {
+        if (finished.isEmpty() && live.isEmpty()) {
             return new ArrayList<>();
         }
         List<StandingsCalculator.Guess> guesses = new ArrayList<>();
@@ -371,16 +382,26 @@ public class RoundService {
             predictors.add(p.getUser().getId());
         }
         List<Long> participants = RoundParticipants.select(toMembers(memberList), predictors);
+        // баллы за сыгранное
+        Map<Long, Integer> settled = new HashMap<>();
+        for (StandingsCalculator.Row r : StandingsCalculator.calculate(
+                participants, finished, guesses, rules.tiebreakers(), rules.scoring(), jokers)) {
+            settled.put(r.userId(), r.points());
+        }
+        // места считаем с учётом идущих матчей: таблица отвечает на вопрос «а если так и закончится»
+        List<StandingsCalculator.FinishedMatch> withLive = new ArrayList<>(finished);
+        withLive.addAll(live);
         List<StandingsCalculator.Row> rows = StandingsCalculator.calculate(
-                participants, finished, guesses, rules.tiebreakers(), rules.scoring(), jokers);
+                participants, withLive, guesses, rules.tiebreakers(), rules.scoring(), jokers);
 
         List<StandingRow> result = new ArrayList<>();
         for (StandingsCalculator.Row r : rows) {
             // победитель и проигравший определяются только по окончании тура
             UserLabel who = names.getOrDefault(r.userId(), UserLabel.UNKNOWN);
+            int done = settled.getOrDefault(r.userId(), 0);
             result.add(new StandingRow(r.userId(), who.username(), who.badge(), r.place(),
-                    r.points(), r.exactScores(), r.outcomeHits(), r.goalDiffHits(), r.goalError(),
-                    false, false));
+                    done, r.points() - done, r.exactScores(), r.outcomeHits(), r.goalDiffHits(),
+                    r.goalError(), false, false));
         }
         return result;
     }

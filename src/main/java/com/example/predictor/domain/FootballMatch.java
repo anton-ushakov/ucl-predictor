@@ -85,6 +85,13 @@ public class FootballMatch {
     @Column(length = 20)
     private String duration;
 
+    /** Счёт идущего матча. Только для показа: баллы начисляются по сыгранному. */
+    @Column(name = "live_home")
+    private Integer liveHome;
+
+    @Column(name = "live_away")
+    private Integer liveAway;
+
     protected FootballMatch() {
     }
 
@@ -211,6 +218,8 @@ public class FootballMatch {
             this.penHome = penHome;
             this.penAway = penAway;
             this.duration = duration;
+            this.liveHome = null;
+            this.liveAway = null;
         } else {
             // "сыгран", но счёта нет: считаем матч ещё идущим, чтобы не подсчитать баллы по пустому счёту
             this.status = status == MatchStatus.FINISHED ? MatchStatus.LIVE : status;
@@ -221,8 +230,16 @@ public class FootballMatch {
             this.penHome = null;
             this.penAway = null;
             this.duration = null;
+            // идущий матч: счёт показываем, но в подсчёт баллов он не идёт
+            boolean playing = this.status == MatchStatus.LIVE;
+            this.liveHome = playing ? homeScore : null;
+            this.liveAway = playing ? awayScore : null;
         }
     }
+
+    /** Текущий счёт идущего матча: только для показа, баллы по нему не считаются. */
+    public Integer getLiveHome() { return liveHome; }
+    public Integer getLiveAway() { return liveAway; }
 
     public boolean isFinished() {
         return status == MatchStatus.FINISHED && homeScore != null && awayScore != null;

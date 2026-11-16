@@ -58,7 +58,8 @@ public final class RoundDtos {
     public record MatchView(Long matchId, String homeTeam, String awayTeam,
                             String homeCrest, String awayCrest, Instant kickoffAt,
                             Instant lockAt, String stage, Integer matchday, MatchStatus status,
-                            Integer homeScore, Integer awayScore, ScoreDetail scoreDetail,
+                            Integer homeScore, Integer awayScore,
+                            Integer liveHome, Integer liveAway, ScoreDetail scoreDetail,
                             String counting, ScoreDecisionView scoreDecision,
                             boolean open, boolean locked,
                             int predictedCount, int memberCount, MyPrediction mine,
@@ -85,8 +86,9 @@ public final class RoundDtos {
     public record ProposeRequest(@NotNull Boolean countRegularTimeOnly) {
     }
 
+    /** livePoints: баллы, которые набегают прямо сейчас по идущим матчам. */
     public record StandingRow(Long userId, String username, String badge,
-                              int place, int points, int exactScores,
+                              int place, int points, int livePoints, int exactScores,
                               int outcomeHits, int goalDiffHits, int goalError,
                               boolean winner, boolean loser) {
     }
@@ -96,7 +98,7 @@ public final class RoundDtos {
                             boolean standingsFinal, List<StandingRow> standings,
                             List<String> buyers, List<String> receivers, List<String> notParticipated,
                             int pendingDecisions, int decisionsForMe, String note,
-                            boolean jokerEnabled, Long jokerMatchId) {
+                            boolean jokerEnabled, Long jokerMatchId, int liveMatches) {
     }
 
     /**

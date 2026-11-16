@@ -134,7 +134,7 @@ public class MatchSelectionService {
                 : "Матчи этого турнира добавляются вручную: укажите команды и время начала, "
                 + "а после игры введите счёт.";
         Set<Long> auto = autoIds(groupId);
-        return new SelectionView(week, chosen.getId(), ms.isOwner(), !chosen.isSynced(),
+        return new SelectionView(week, chosen.getId(), GroupAccess.canSelectMatches(ms), !chosen.isSynced(),
                 auto.contains(chosen.getId()), selected.size(),
                 all.stream().map(c -> toDto(c, auto)).toList(), views, note);
     }
@@ -145,7 +145,7 @@ public class MatchSelectionService {
     @Transactional
     public SelectionResult add(AppUser user, Long groupId, List<Long> matchIds) {
         Membership ms = access.require(user, groupId);
-        requireOwner(ms);
+        requireSelector(ms);
         LocalDate last = time.lastPredictableWeek();
         LocalDate first = time.currentWeek();
         TeamNameMap teamLabels = teamNames.mapFor(ms.group());
@@ -193,7 +193,7 @@ public class MatchSelectionService {
     @Transactional
     public SelectionResult remove(AppUser user, Long groupId, Long matchId) {
         Membership ms = access.require(user, groupId);
-        requireOwner(ms);
+        requireSelector(ms);
         RoundMatch rm = selection.findByGroupIdAndMatchId(groupId, matchId).orElse(null);
         fail(SelectionRules.canRemove(rm != null,
                 rm != null && predictions.existsForMatch(groupId, matchId)));
@@ -209,7 +209,7 @@ public class MatchSelectionService {
     @Transactional
     public ManualMatchResult createManual(AppUser user, Long groupId, ManualMatchRequest request) {
         Membership ms = access.require(user, groupId);
-        requireOwner(ms);
+        requireSelector(ms);
         Competition competition = competitions.findById(request.competitionId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Турнир не найден"));
 
@@ -234,7 +234,7 @@ public class MatchSelectionService {
     public ManualMatchResult editManual(AppUser user, Long groupId, Long matchId,
                                         ManualMatchRequest request) {
         Membership ms = access.require(user, groupId);
-        requireOwner(ms);
+        requireSelector(ms);
         FootballMatch match = requireManual(groupId, matchId);
         if (predictions.existsForMatch(groupId, matchId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -265,7 +265,7 @@ public class MatchSelectionService {
     public ManualMatchResult setScore(AppUser user, Long groupId, Long matchId,
                                       ManualScoreRequest request) {
         Membership ms = access.require(user, groupId);
-        requireOwner(ms);
+        requireSelector(ms);
         FootballMatch match = requireManual(groupId, matchId);
         Rules rules = rulesService.rulesFor(ms.group(), match.getRoundWeek());
         Instant now = Instant.now();
@@ -283,7 +283,7 @@ public class MatchSelectionService {
     @Transactional
     public ManualMatchResult cancelManual(AppUser user, Long groupId, Long matchId) {
         Membership ms = access.require(user, groupId);
-        requireOwner(ms);
+        requireSelector(ms);
         FootballMatch match = requireManual(groupId, matchId);
         match.cancelManual();
         matches.save(match);
@@ -310,10 +310,24 @@ public class MatchSelectionService {
         }
     }
 
+    /**
+     * Право собирать тур: у владельца всегда, у остальных — как решила группа в настройках.
+     * Автосостав турнира остаётся за владельцем: это правило не на один тур, а на все вперёд.
+     */
+    private static void requireSelector(Membership ms) {
+        if (!GroupAccess.canSelectMatches(ms)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, switch (ms.group().getMatchSelection()) {
+                case OWNER -> "Состав тура собирает владелец группы";
+                case HELPERS -> "Состав тура собирают владелец группы и его помощники";
+                case ANYONE -> "Состав тура сейчас менять нельзя";
+            });
+        }
+    }
+
     private static void requireOwner(Membership ms) {
         if (!ms.isOwner()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Состав тура определяет владелец группы");
+                    "Это правило устанавливает владелец группы");
         }
     }
 

@@ -68,13 +68,20 @@ public class FriendGroup {
     @Column(name = "use_russian_names", nullable = false)
     private boolean useRussianNames = true;
 
+    /** Кто может собирать состав тура. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "match_selection", nullable = false, length = 10)
+    private MatchSelection matchSelection = MatchSelection.OWNER;
+
     /** Разрешён ли джокер: один матч тура с удвоенными баллами. */
     @Column(name = "joker_enabled", nullable = false)
     private boolean jokerEnabled = false;
 
     public void changeSettings(int lockMinutesBefore, List<Tiebreaker> tiebreakerList, RevealMode revealMode,
                                ScoreBasis scoreBasis, SubmissionMode submissionMode, Scoring scoring,
-                               boolean useRussianNames, boolean jokerEnabled) {
+                               boolean useRussianNames, boolean jokerEnabled,
+                               MatchSelection matchSelection) {
+        this.matchSelection = matchSelection;
         this.useRussianNames = useRussianNames;
         this.jokerEnabled = jokerEnabled;
         this.submissionMode = submissionMode;
@@ -122,4 +129,5 @@ public class FriendGroup {
     public RevealMode getRevealMode() { return revealMode; }
     public boolean isUseRussianNames() { return useRussianNames; }
     public boolean isJokerEnabled() { return jokerEnabled; }
+    public MatchSelection getMatchSelection() { return matchSelection; }
 }

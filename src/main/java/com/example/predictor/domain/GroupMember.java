@@ -28,6 +28,10 @@ public class GroupMember {
     @Column(name = "joined_at", nullable = false, updatable = false)
     private Instant joinedAt = Instant.now();
 
+    /** Помощник: может собирать состав тура, когда группа это разрешила. */
+    @Column(name = "helper", nullable = false)
+    private boolean helper = false;
+
     protected GroupMember() {
     }
 
@@ -37,6 +41,12 @@ public class GroupMember {
         this.user = user;
         this.role = role;
     }
+
+    public void setHelper(boolean helper) {
+        this.helper = helper;
+    }
+
+    public boolean isHelper() { return helper; }
 
     public GroupMemberId getId() { return id; }
     public FriendGroup getGroup() { return group; }

@@ -2,6 +2,7 @@ package com.example.predictor.group;
 
 import com.example.predictor.auth.AuthService;
 import com.example.predictor.domain.AppUser;
+import com.example.predictor.domain.MatchSelection;
 import com.example.predictor.domain.RevealMode;
 import com.example.predictor.domain.ScoreBasis;
 import com.example.predictor.domain.SubmissionMode;
@@ -42,7 +43,11 @@ public class GroupController {
             @Min(0) @Max(100) Integer goalDiffPoints,
             @Min(0) @Max(100) Integer outcomePoints,
             Boolean useRussianNames,
-            Boolean jokerEnabled) {
+            Boolean jokerEnabled,
+            MatchSelection matchSelection) {
+    }
+
+    public record HelperRequest(@NotNull Boolean helper) {
     }
 
     public record RenameRequest(@NotBlank @Size(max = 100) String name) {
@@ -104,7 +109,19 @@ public class GroupController {
         boolean useRussianNames = request.useRussianNames() == null || request.useRussianNames();
         return groups.updateSettings(user, groupId, request.lockMinutesBefore(),
                 request.tiebreakers(), request.revealMode(), scoreBasis, submissionMode, scoring,
-                useRussianNames, Boolean.TRUE.equals(request.jokerEnabled()));
+                useRussianNames, Boolean.TRUE.equals(request.jokerEnabled()),
+                request.matchSelection() == null ? MatchSelection.OWNER : request.matchSelection());
+    }
+
+    /** Отметить участника помощником: он сможет собирать состав тура. Только владелец. */
+    @PutMapping("/{groupId}/members/{userId}/helper")
+    public GroupService.MemberDto setHelper(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("userId") Long userId,
+            @Valid @RequestBody HelperRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        return groups.setHelper(user, groupId, userId, request.helper());
     }
 
     /** Переименовать группу (только владелец). */

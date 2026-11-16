@@ -9,6 +9,7 @@ import java.time.Instant;
 import com.example.predictor.domain.FriendGroup;
 import com.example.predictor.domain.GroupMember;
 import com.example.predictor.domain.GroupRole;
+import com.example.predictor.domain.MatchSelection;
 import com.example.predictor.domain.RevealMode;
 import com.example.predictor.domain.ScoreBasis;
 import com.example.predictor.domain.SubmissionMode;
@@ -34,7 +35,9 @@ public class GroupService {
     public record GroupDto(Long id, String name, String inviteCode, int memberCount, GroupRole myRole) {
     }
 
-    public record MemberDto(Long userId, String username, String badge, GroupRole role) {
+    /** helper=true: участник может собирать состав тура, когда группа это разрешила. */
+    public record MemberDto(Long userId, String username, String badge, GroupRole role,
+                            boolean helper) {
     }
 
     /**
@@ -46,7 +49,7 @@ public class GroupService {
                               SubmissionMode submissionMode,
                               int exactScorePoints, int goalDiffPoints, int outcomePoints,
                               String scoringDescription, boolean useRussianNames,
-                              boolean jokerEnabled) {
+                              boolean jokerEnabled, MatchSelection matchSelection) {
     }
 
     /**
@@ -62,7 +65,8 @@ public class GroupService {
     public record GroupDetailDto(Long id, String name, String inviteCode, GroupRole myRole,
                                  List<MemberDto> members, SettingsDto settings,
                                  List<OptionDto> availableTiebreakers, List<OptionDto> availableRevealModes,
-                                 List<OptionDto> availableSubmissionModes, String settingsNote) {
+                                 List<OptionDto> availableSubmissionModes,
+                                 List<OptionDto> availableMatchSelections, String settingsNote) {
     }
 
     private static final String SETTINGS_NOTE =
@@ -135,22 +139,25 @@ public class GroupService {
         FriendGroup g = ms.group();
         List<MemberDto> memberDtos = members.findAllWithUser(g.getId()).stream()
                 .map(m -> new MemberDto(m.getUser().getId(), m.getUser().getUsername(),
-                        m.getUser().getBadge(), m.getRole()))
+                        m.getUser().getBadge(), m.getRole(), m.isHelper()))
                 .toList();
         SettingsDto settings = new SettingsDto(g.getLockMinutesBefore(),
                 g.tiebreakerList().stream().map(Enum::name).toList(), g.getRevealMode(),
                 g.scoreBasis().extraTime(), g.scoreBasis().penalties(), g.getSubmissionMode(),
                 g.scoring().exactScorePoints(), g.scoring().goalDiffPoints(),
                 g.scoring().outcomePoints(), g.scoring().describe(), g.isUseRussianNames(),
-                g.isJokerEnabled());
+                g.isJokerEnabled(), g.getMatchSelection());
         List<OptionDto> tiebreakerOptions = Arrays.stream(Tiebreaker.values())
                 .map(t -> new OptionDto(t.name(), t.getDescription())).toList();
         List<OptionDto> revealOptions = Arrays.stream(RevealMode.values())
                 .map(r -> new OptionDto(r.name(), r.getDescription())).toList();
         List<OptionDto> submissionOptions = Arrays.stream(SubmissionMode.values())
                 .map(m -> new OptionDto(m.name(), m.getDescription())).toList();
+        List<OptionDto> selectionOptions = Arrays.stream(MatchSelection.values())
+                .map(m -> new OptionDto(m.name(), m.getDescription())).toList();
         return new GroupDetailDto(g.getId(), g.getName(), visibleInviteCode(g), ms.member().getRole(),
-                memberDtos, settings, tiebreakerOptions, revealOptions, submissionOptions, SETTINGS_NOTE);
+                memberDtos, settings, tiebreakerOptions, revealOptions, submissionOptions,
+                selectionOptions, SETTINGS_NOTE);
     }
 
     /** Только владелец. Прогнозы это не затрагивает: их не может изменить никто. */
@@ -159,7 +166,7 @@ public class GroupService {
                                       List<String> tiebreakerNames, RevealMode revealMode,
                                       ScoreBasis scoreBasis, SubmissionMode submissionMode,
                                       Scoring scoring, boolean useRussianNames,
-                                      boolean jokerEnabled) {
+                                      boolean jokerEnabled, MatchSelection matchSelection) {
         Membership ms = access.requireOwner(current, groupId);
         FriendGroup group = ms.group();
 
@@ -182,12 +189,28 @@ public class GroupService {
         }
 
         group.changeSettings(lockMinutesBefore, tiebreakers, revealMode, scoreBasis, submissionMode,
-                scoring, useRussianNames, jokerEnabled);
+                scoring, useRussianNames, jokerEnabled, matchSelection);
         groups.save(group);
         return new SettingsDto(lockMinutesBefore, tiebreakers.stream().map(Enum::name).toList(), revealMode,
                 scoreBasis.extraTime(), scoreBasis.penalties(), submissionMode,
                 scoring.exactScorePoints(), scoring.goalDiffPoints(), scoring.outcomePoints(),
-                scoring.describe(), useRussianNames, jokerEnabled);
+                scoring.describe(), useRussianNames, jokerEnabled, matchSelection);
+    }
+
+    /**
+     * Назначить или снять помощника: он сможет собирать состав тура, когда владельца нет рядом.
+     * Отмечает только владелец.
+     */
+    @Transactional
+    public MemberDto setHelper(AppUser current, Long groupId, Long userId, boolean helper) {
+        access.requireOwner(current, groupId);
+        GroupMember member = members.findMembership(groupId, userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "В этой группе нет такого участника"));
+        member.setHelper(helper);
+        members.save(member);
+        return new MemberDto(userId, member.getUser().getUsername(), member.getUser().getBadge(),
+                member.getRole(), member.isHelper());
     }
 
     /**

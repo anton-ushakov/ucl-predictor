@@ -34,6 +34,34 @@ public class GroupAccess {
         return new Membership(member.getGroup(), member);
     }
 
+    /**
+     * Может ли участник собирать состав тура. Владелец — всегда; остальные — как решила группа.
+     */
+    public static boolean canSelectMatches(Membership ms) {
+        if (ms.isOwner()) {
+            return true;
+        }
+        return switch (ms.group().getMatchSelection()) {
+            case OWNER -> false;
+            case HELPERS -> ms.member().isHelper();
+            case ANYONE -> true;
+        };
+    }
+
+    /** Состав тура: проверка права с понятным объяснением, кто его имеет. */
+    @Transactional(readOnly = true)
+    public Membership requireMatchSelection(AppUser user, Long groupId) {
+        Membership ms = require(user, groupId);
+        if (!canSelectMatches(ms)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, switch (ms.group().getMatchSelection()) {
+                case OWNER -> "Состав тура собирает владелец группы";
+                case HELPERS -> "Состав тура собирают владелец группы и его помощники";
+                case ANYONE -> "Состав тура сейчас менять нельзя";
+            });
+        }
+        return ms;
+    }
+
     @Transactional(readOnly = true)
     public Membership requireOwner(AppUser user, Long groupId) {
         Membership membership = require(user, groupId);

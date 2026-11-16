@@ -481,14 +481,21 @@ public class NotificationGenerator {
      */
     private void roundSetup(FriendGroup group, List<GroupMember> memberList, Instant now,
                             List<Notification> out) {
-        Long ownerId = null;
+        // напоминаем всем, кто может собрать тур: владельцу всегда, помощникам и остальным —
+        // если группа им это разрешила
+        List<Long> selectors = new ArrayList<>();
         for (GroupMember gm : memberList) {
-            if (gm.getRole() == com.example.predictor.domain.GroupRole.OWNER) {
-                ownerId = gm.getUser().getId();
-                break;
+            boolean owner = gm.getRole() == com.example.predictor.domain.GroupRole.OWNER;
+            boolean allowed = switch (group.getMatchSelection()) {
+                case OWNER -> owner;
+                case HELPERS -> owner || gm.isHelper();
+                case ANYONE -> true;
+            };
+            if (allowed) {
+                selectors.add(gm.getUser().getId());
             }
         }
-        if (ownerId == null) {
+        if (selectors.isEmpty()) {
             return;
         }
         LocalDate last = time.lastPredictableWeek();
@@ -503,8 +510,10 @@ public class NotificationGenerator {
                 continue;
             }
             Text text = NotificationTexts.roundSetup(group.getName(), week);
-            out.add(new Notification(ownerId, group.getId(), NotificationType.ROUND_SETUP,
-                    "setup:" + group.getId() + ":" + week, text.title(), text.body(), week, now));
+            for (Long userId : selectors) {
+                out.add(new Notification(userId, group.getId(), NotificationType.ROUND_SETUP,
+                        "setup:" + group.getId() + ":" + week, text.title(), text.body(), week, now));
+            }
         }
     }
 

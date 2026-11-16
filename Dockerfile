@@ -23,6 +23,10 @@ WORKDIR /app
 
 # Приложение работает не от администратора: так безопаснее
 RUN useradd --system --create-home --shell /usr/sbin/nologin app
+
+# Сюда кладутся выложенные apk. Папку создаём до тома, чтобы у неё был нужный владелец.
+RUN mkdir -p /app/releases && chown app:app /app/releases
+
 USER app
 
 COPY --from=build --chown=app:app /build/target/*.jar app.jar

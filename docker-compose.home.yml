@@ -55,12 +55,16 @@ services:
       # Ключ Firebase монтируется только для чтения; без него push выключен
       FIREBASE_CREDENTIALS: /app/firebase.json
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      # Папка с выложенными apk (том releases ниже)
+      RELEASES_DIR: /app/releases
       TZ: ${APP_TIMEZONE:-Europe/Moscow}
       # Памяти дома много, поэтому Java можно не ужимать
       JAVA_OPTS: "-Xmx768m -XX:MaxMetaspaceSize=256m"
     volumes:
       # Ключ Firebase. Если его нет, подставляется пустышка и push просто выключен.
       - ${FIREBASE_KEY:-/dev/null}:/app/firebase.json:ro
+      # Выложенные версии приложения переживают пересборку образа
+      - releases:/app/releases
     ports:
       # Доступ по домашней сети: http://адрес-ноутбука:8080
       - "8080:8080"
@@ -76,3 +80,4 @@ services:
 
 volumes:
   db-data:
+  releases:

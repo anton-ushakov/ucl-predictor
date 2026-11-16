@@ -54,10 +54,14 @@ services:
       # Ключ Firebase монтируется только для чтения; без него push выключен
       FIREBASE_CREDENTIALS: /app/firebase.json
       FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      # Папка с выложенными apk (том releases ниже)
+      RELEASES_DIR: /app/releases
       TZ: ${APP_TIMEZONE:-Europe/Moscow}
     volumes:
       # Ключ Firebase. Если его нет, подставляется пустышка и push просто выключен.
       - ${FIREBASE_KEY:-/dev/null}:/app/firebase.json:ro
+      # Выложенные версии приложения переживают пересборку образа
+      - releases:/app/releases
     # Наружу порт не открываем: снаружи с приложением говорит только Caddy
 
   caddy:
@@ -78,5 +82,6 @@ services:
 
 volumes:
   db-data:
+  releases:
   caddy-data:
   caddy-config:

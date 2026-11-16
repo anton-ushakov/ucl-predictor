@@ -41,6 +41,20 @@ public class AnnouncementService {
         this.push = push;
     }
 
+    /**
+     * Объявление о версии, которая лежит на самом сервере: ссылка не обязательна, потому что
+     * приложение скачивает и ставит обновление само.
+     */
+    @Transactional
+    public Result announceRelease(AppUser sender, String version, String note, String link) {
+        admin.require(sender);
+        String cleanVersion = version == null ? "" : version.trim();
+        if (cleanVersion.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Укажите номер версии");
+        }
+        return send(cleanVersion, releaseBody(note, link == null ? "" : link.trim()));
+    }
+
     @Transactional
     public Result announceUpdate(AppUser sender, String version, String note, String link) {
         admin.require(sender);
@@ -58,8 +72,12 @@ public class AnnouncementService {
                     "Ссылка должна начинаться с https://");
         }
 
+        return send(cleanVersion, buildBody(note, cleanLink));
+    }
+
+    /** Рассылает объявление всем, кому оно ещё не уходило. */
+    private Result send(String cleanVersion, String body) {
         String title = "Вышла версия " + cleanVersion;
-        String body = buildBody(note, cleanLink);
         String dedupKey = "app-update:" + cleanVersion;
 
         List<AppUser> everyone = users.findAll();
@@ -92,6 +110,19 @@ public class AnnouncementService {
                 ? "Об этой версии уже сообщали всем участникам"
                 : "Объявление отправлено участникам: " + fresh.size();
         return new Result(fresh.size(), already.size(), message);
+    }
+
+    private static String releaseBody(String note, String link) {
+        StringBuilder text = new StringBuilder();
+        if (note != null && !note.isBlank()) {
+            text.append(note.trim()).append("\n\n");
+        }
+        text.append("Откройте «Обновление» в приложении и нажмите «Скачать и установить».");
+        if (!link.isBlank()) {
+            text.append("\nЕсли этой кнопки у вас ещё нет, скачайте: ").append(link);
+        }
+        String body = text.toString();
+        return body.length() > 600 ? body.substring(0, 600) : body;
     }
 
     private static String buildBody(String note, String link) {

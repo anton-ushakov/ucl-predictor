@@ -103,9 +103,15 @@ public class ApiFootballSyncService {
                 updated += counts[1];
                 skipped += counts[2];
                 if (items.isEmpty()) {
-                    log.info("{}: источник не вернул ни одного матча. Возможно, у турнира другой "
-                            + "номер или другой сезон (запрашивали league={}, season={})",
-                            competition.getShortName(), competition.getExternalId(), season);
+                    String problem = response == null ? "пустой ответ" : response.problem();
+                    if (problem != null) {
+                        log.warn("{}: источник отказал: {}", competition.getShortName(), problem);
+                    } else {
+                        log.warn("{}: матчей не найдено (league={}, season={}, с {} по {}). "
+                                        + "Скорее всего, у турнира другой номер или другой сезон",
+                                competition.getShortName(), competition.getExternalId(), season,
+                                from, to);
+                    }
                 }
             } catch (ApiFootballClient.BudgetException e) {
                 log.warn("{}", e.getMessage());

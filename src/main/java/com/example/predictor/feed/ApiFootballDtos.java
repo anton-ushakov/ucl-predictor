@@ -10,9 +10,21 @@ public final class ApiFootballDtos {
     private ApiFootballDtos() {
     }
 
-    /** errors приходит либо пустым списком, либо объектом с полями — читаем как строку. */
+    /**
+     * api-sports.io отвечает 200 даже тогда, когда запрос ему не понравился: причина лежит
+     * в errors. Приходит либо пустым списком, либо объектом с полями, поэтому тип свободный.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Response(List<Item> response, Integer results) {
+    public record Response(List<Item> response, Integer results, Object errors) {
+
+        /** Текст ошибки источника или null, если всё в порядке. */
+        public String problem() {
+            if (errors == null) {
+                return null;
+            }
+            String text = errors.toString();
+            return text.isBlank() || text.equals("[]") || text.equals("{}") ? null : text;
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

@@ -49,9 +49,16 @@ public class ApiFootballClient {
         this.dailyLimit = dailyLimit;
         RestClient.Builder builder = RestClient.builder().baseUrl(baseUrl);
         if (configured) {
-            builder.defaultHeader("x-apisports-key", key.trim());
+            if (baseUrl.contains("rapidapi")) {
+                // ключ, выданный через RapidAPI, ходит с другими заголовками
+                builder.defaultHeader("x-rapidapi-key", key.trim());
+                builder.defaultHeader("x-rapidapi-host", "api-football-v1.p.rapidapi.com");
+            } else {
+                builder.defaultHeader("x-apisports-key", key.trim());
+            }
         }
         this.http = builder.build();
+        log.info("api-sports.io: ключ {}, адрес {}", configured ? "задан" : "не задан", baseUrl);
     }
 
     public boolean isConfigured() {

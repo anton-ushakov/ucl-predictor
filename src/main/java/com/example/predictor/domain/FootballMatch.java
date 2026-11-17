@@ -130,6 +130,12 @@ public class FootballMatch {
         this.status = MatchStatus.SCHEDULED;
     }
 
+    /** Эмблемы ручного матча: берутся из справочника команд. */
+    public void setCrests(String homeCrest, String awayCrest) {
+        this.homeCrest = homeCrest;
+        this.awayCrest = awayCrest;
+    }
+
     /** Матч добавлен вручную: счёт вводит владелец группы, из источника он не придёт. */
     public boolean isManual() {
         return externalId == null;

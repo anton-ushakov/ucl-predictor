@@ -171,6 +171,39 @@ public class AuthService {
         return issueToken(user, recoveryCode);
     }
 
+    /**
+     * Смена своего имени. Имя — это и вход в приложение, поэтому дальше участник заходит
+     * под новым. Прогнозы, итоги и долги привязаны к номеру участника и остаются на месте.
+     */
+    @Transactional
+    public MeResponseName renameSelf(AppUser current, String username) {
+        String name = normalizeUsername(username);
+        if (name.length() < 2 || name.length() > 40) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Имя от двух до сорока знаков");
+        }
+        if (name.equalsIgnoreCase(current.getUsername())) {
+            return new MeResponseName(name, "Имя и так такое");
+        }
+        if (users.existsByUsernameIgnoreCase(name)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Это имя уже занято");
+        }
+        AppUser user = users.findById(current.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Участник не найден"));
+        user.rename(name);
+        try {
+            users.save(user);
+            users.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Это имя уже занято");
+        }
+        return new MeResponseName(name, "Теперь вас зовут " + name + ". Входить тоже под этим именем");
+    }
+
+    /** Ответ на смену имени. */
+    public record MeResponseName(String username, String message) {
+    }
+
     @Transactional
     public AuthResponse login(String username, String password) {
         authMode.requirePasswords();

@@ -48,13 +48,16 @@ public class MatchSelectionService {
     private final TeamNamesService teamNames;
     private final com.example.predictor.repository.GroupAutoCompetitionRepository autos;
     private final AutoSelectionService autoSelection;
+    private final com.example.predictor.names.TeamCatalogService catalog;
 
     public MatchSelectionService(GroupAccess access, RulesService rulesService,
                                  CompetitionRepository competitions, MatchRepository matches,
                                  RoundMatchRepository selection, PredictionRepository predictions,
                                  AppTime time, TeamNamesService teamNames,
                                  com.example.predictor.repository.GroupAutoCompetitionRepository autos,
-                                 AutoSelectionService autoSelection) {
+                                 AutoSelectionService autoSelection,
+                                 com.example.predictor.names.TeamCatalogService catalog) {
+        this.catalog = catalog;
         this.autos = autos;
         this.autoSelection = autoSelection;
         this.teamNames = teamNames;
@@ -215,14 +218,16 @@ public class MatchSelectionService {
 
         LocalDate week = RoundWeeks.mondayOf(request.kickoffAt(), time.zone());
         fail(SelectionRules.canPlaceManual(week, time.currentWeek(), time.lastPredictableWeek()));
-        fail(SelectionRules.checkTeams(request.homeTeam(), request.awayTeam()));
-        String home = request.homeTeam().trim();
-        String away = request.awayTeam().trim();
+
+        // команды либо выбраны из справочника, либо набраны руками (старые версии приложения)
+        Picked picked = pick(request);
+        fail(SelectionRules.checkTeams(picked.home(), picked.away()));
         String stage = request.stage() == null || request.stage().isBlank()
                 ? null : request.stage().trim();
 
-        FootballMatch match = new FootballMatch(competition, groupId, user.getId(), home, away,
-                request.kickoffAt(), week, stage);
+        FootballMatch match = new FootballMatch(competition, groupId, user.getId(),
+                picked.home(), picked.away(), request.kickoffAt(), week, stage);
+        match.setCrests(picked.homeCrest(), picked.awayCrest());
         matches.save(match);
         matches.flush();
         selection.save(new RoundMatch(groupId, week, match.getId(), user.getId(), Instant.now()));
@@ -242,12 +247,14 @@ public class MatchSelectionService {
         }
         LocalDate week = RoundWeeks.mondayOf(request.kickoffAt(), time.zone());
         fail(SelectionRules.canPlaceManual(week, time.currentWeek(), time.lastPredictableWeek()));
-        fail(SelectionRules.checkTeams(request.homeTeam(), request.awayTeam()));
+        Picked picked = pick(request);
+        fail(SelectionRules.checkTeams(picked.home(), picked.away()));
         Competition competition = competitions.findById(request.competitionId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Турнир не найден"));
         match.setCompetition(competition);
-        match.editManual(request.homeTeam().trim(), request.awayTeam().trim(), request.kickoffAt(),
+        match.editManual(picked.home(), picked.away(), request.kickoffAt(),
                 week, request.stage() == null || request.stage().isBlank() ? null : request.stage().trim());
+        match.setCrests(picked.homeCrest(), picked.awayCrest());
         matches.save(match);
 
         // неделя матча могла измениться: переносим его в нужный тур
@@ -337,6 +344,36 @@ public class MatchSelectionService {
             ids.add(m.getId());
         }
         return ids;
+    }
+
+    /** Команды матча: названия и эмблемы, откуда бы они ни пришли. */
+    private record Picked(String home, String away, String homeCrest, String awayCrest) {
+    }
+
+    /**
+     * Команда из справочника берётся вместе с эмблемой — набирать название и искать картинку
+     * каждый раз не нужно. Если справочник не использовали, остаётся ручной ввод.
+     */
+    private Picked pick(ManualMatchRequest request) {
+        String home = request.homeTeam() == null ? null : request.homeTeam().trim();
+        String away = request.awayTeam() == null ? null : request.awayTeam().trim();
+        String homeCrest = null;
+        String awayCrest = null;
+        if (request.homeTeamId() != null) {
+            var team = catalog.require(request.homeTeamId());
+            home = team.getName();
+            homeCrest = catalog.crestOf(team);
+        }
+        if (request.awayTeamId() != null) {
+            var team = catalog.require(request.awayTeamId());
+            away = team.getName();
+            awayCrest = catalog.crestOf(team);
+        }
+        if (home == null || home.isBlank() || away == null || away.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Выберите обе команды");
+        }
+        return new Picked(home, away, homeCrest, awayCrest);
     }
 
     private static CompetitionDto toDto(Competition c, Set<Long> auto) {

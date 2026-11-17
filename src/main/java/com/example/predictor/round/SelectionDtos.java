@@ -54,9 +54,15 @@ public final class SelectionDtos {
     }
 
     /** Ручной матч: владелец вводит команды и время начала сам. */
+    /**
+     * Ручной матч. Команды либо выбраны из справочника (homeTeamId и awayTeamId), либо набраны
+     * руками (homeTeam и awayTeam) — второе оставлено для старых версий приложения.
+     */
     public record ManualMatchRequest(@NotNull(message = "Укажите турнир") Long competitionId,
-                                     @NotBlank(message = "Укажите хозяев") @Size(max = 100) String homeTeam,
-                                     @NotBlank(message = "Укажите гостей") @Size(max = 100) String awayTeam,
+                                     @Size(max = 100) String homeTeam,
+                                     @Size(max = 100) String awayTeam,
+                                     Long homeTeamId,
+                                     Long awayTeamId,
                                      @NotNull(message = "Укажите время начала") Instant kickoffAt,
                                      @Size(max = 40) String stage) {
     }

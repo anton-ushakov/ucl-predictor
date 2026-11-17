@@ -156,6 +156,18 @@ public class AuthController {
         return new BadgesResponse(Badges.ALL, saved);
     }
 
+    /** Сменить своё имя. Дальше вход по новому имени: прогнозы и итоги остаются на месте. */
+    @PutMapping("/auth/username")
+    public AuthService.MeResponseName rename(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @Valid @RequestBody RenameRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        return auth.renameSelf(user, request.username());
+    }
+
+    public record RenameRequest(@NotBlank @Size(min = 2, max = 40) String username) {
+    }
+
     /** Смена пароля тем, кто помнит текущий. В ответе новый токен: старые входы отзываются. */
     @PostMapping("/auth/password")
     public AuthResponse changePassword(

@@ -148,6 +148,11 @@ public class AppUser {
 
     public void setBadge(String badge) { this.badge = badge; }
 
+    /** Участник сменил имя. Все прогнозы и итоги привязаны к номеру, поэтому они не теряются. */
+    public void rename(String username) {
+        this.username = username;
+    }
+
     public Long getId() { return id; }
     public String getUsername() { return username; }
     public String getPasswordHash() { return passwordHash; }

@@ -56,7 +56,9 @@ public final class RoundDtos {
      * counting: как матч учитывается (FULL, REGULAR_ONLY, EXCLUDED, NEEDS_DECISION, VOTING, NOT_PLAYED,
      * CANCELLED). homeScore и awayScore пусты, пока матч не идёт в зачёт.
      */
+    /** competitionCode — обозначение турнира (CL, PL, …): по нему приложение выбирает оформление. */
     public record MatchView(Long matchId, String homeTeam, String awayTeam,
+                            String competitionCode, String competition,
                             String homeCrest, String awayCrest, Instant kickoffAt,
                             Instant lockAt, String stage, Integer matchday, MatchStatus status,
                             Integer homeScore, Integer awayScore,

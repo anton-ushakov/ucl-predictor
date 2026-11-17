@@ -287,7 +287,10 @@ public class RoundService {
                 liveMatches++;
             }
             views.add(new MatchView(m.getId(), teamLabels.display(m.getHomeTeam()),
-                    teamLabels.display(m.getAwayTeam()), m.getHomeCrest(), m.getAwayCrest(),
+                    teamLabels.display(m.getAwayTeam()),
+                    m.getCompetition() == null ? null : m.getCompetition().getCode(),
+                    m.getCompetition() == null ? null : m.getCompetition().getShortName(),
+                    m.getHomeCrest(), m.getAwayCrest(),
                     m.getKickoffAt(), lockAt,
                     m.getStage(), m.getMatchday(), m.getStatus(),
                     counted ? m.scoreHome(info.basis()) : null, counted ? m.scoreAway(info.basis()) : null,

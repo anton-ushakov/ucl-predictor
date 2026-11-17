@@ -27,7 +27,12 @@ public class TeamCatalogService {
     /** Сколько команд отдаём за раз: список листается поиском, а не прокруткой. */
     private static final int LIMIT = 60;
 
-    public record TeamDto(Long id, String kind, String name, String crest) {
+    /**
+     * crest — готовая картинка для показа (своя или флаг по коду), crestUrl и countryCode —
+     * то, что лежит в справочнике: по ним заполняется окно правки.
+     */
+    public record TeamDto(Long id, String kind, String name, String crest, String crestUrl,
+                          String countryCode) {
     }
 
     public record CatalogView(List<TeamDto> teams, int clubs, int nationals, String note) {
@@ -80,7 +85,8 @@ public class TeamCatalogService {
     }
 
     public TeamDto toDto(Team team) {
-        return new TeamDto(team.getId(), team.getKind().name(), team.getName(), crestOf(team));
+        return new TeamDto(team.getId(), team.getKind().name(), team.getName(), crestOf(team),
+                team.getCrest(), team.getCountryCode());
     }
 
     @Transactional

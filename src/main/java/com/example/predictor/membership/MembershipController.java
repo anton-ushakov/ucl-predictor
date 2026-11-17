@@ -1,7 +1,6 @@
 package com.example.predictor.membership;
 
 import com.example.predictor.auth.AuthService;
-import com.example.predictor.domain.AppUser;
 import com.example.predictor.membership.MembershipService.CandidateDto;
 import com.example.predictor.membership.MembershipService.OpenGroupDto;
 import com.example.predictor.membership.MembershipService.RequestDto;

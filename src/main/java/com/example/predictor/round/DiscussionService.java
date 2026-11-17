@@ -7,6 +7,7 @@ import com.example.predictor.domain.RoundMessage;
 import com.example.predictor.group.GroupAccess;
 import com.example.predictor.group.GroupAccess.Membership;
 import com.example.predictor.repository.GroupMemberRepository;
+import com.example.predictor.notify.DiscussionAlerts;
 import com.example.predictor.repository.RoundMessageRepository;
 import com.example.predictor.standings.RoundWeeks;
 import org.springframework.http.HttpStatus;
@@ -43,12 +44,14 @@ public class DiscussionService {
     private final GroupAccess access;
     private final RoundMessageRepository messages;
     private final GroupMemberRepository members;
+    private final DiscussionAlerts alerts;
 
     public DiscussionService(GroupAccess access, RoundMessageRepository messages,
-                             GroupMemberRepository members) {
+                             GroupMemberRepository members, DiscussionAlerts alerts) {
         this.access = access;
         this.messages = messages;
         this.members = members;
+        this.alerts = alerts;
     }
 
     @Transactional(readOnly = true)
@@ -82,6 +85,9 @@ public class DiscussionService {
         }
         RoundMessage saved = messages.save(
                 new RoundMessage(groupId, week, user.getId(), clean, Instant.now()));
+        messages.flush();
+        // остальные узнают сразу: разговор тем и живёт, что ответ приходит в ту же минуту
+        alerts.newMessage(ms.group(), week, user, saved.getId(), clean, saved.getCreatedAt());
         return toDto(saved, user, ms.isOwner(), labels(groupId));
     }
 

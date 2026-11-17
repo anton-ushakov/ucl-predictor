@@ -100,28 +100,19 @@ public final class NotificationTexts {
         return "баллов";
     }
     /**
-     * Новые сообщения в обсуждении тура. Одно оповещение на пачку: писать о каждой реплике
-     * значит превратить телефон в барабан.
+     * Новое сообщение в обсуждении тура. Одно оповещение на реплику: разговор тем и живёт,
+     * что ответ приходит сразу, а не пачкой через полчаса.
      */
-    public static Text discussion(String groupName, LocalDate week, int count, String lastAuthor,
-                                  String lastText) {
+    public static Text discussion(String groupName, LocalDate week, String author, String text) {
         String title = "Обсуждение тура " + week.format(DAY);
-        StringBuilder body = new StringBuilder(groupName).append(": ")
-                .append(count).append(" ").append(messageWord(count));
-        if (lastAuthor != null && lastText != null) {
-            body.append(". ").append(lastAuthor).append(": ").append(shorten(lastText, 120));
+        StringBuilder body = new StringBuilder(groupName);
+        if (author != null && !author.isBlank()) {
+            body.append(" · ").append(author);
+        }
+        if (text != null && !text.isBlank()) {
+            body.append(": ").append(shorten(text, 120));
         }
         return new Text(title, body.toString());
-    }
-
-    static String messageWord(int count) {
-        if (count % 10 == 1 && count % 100 != 11) {
-            return "новое сообщение";
-        }
-        if (count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14)) {
-            return "новых сообщения";
-        }
-        return "новых сообщений";
     }
 
     private static String shorten(String text, int max) {

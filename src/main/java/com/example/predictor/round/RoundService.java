@@ -34,6 +34,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -60,6 +61,8 @@ public class RoundService {
     }
 
     private static final int HISTORY_WEEKS_BACK = 12;
+    /** Прошедшие туры идут после будущих: сдвиг больше любого расстояния в днях. */
+    private static final long PAST_OFFSET = 1_000_000L;
 
     private final GroupAccess access;
     private final RulesService rulesService;
@@ -175,8 +178,21 @@ public class RoundService {
                         0, memberList.size(), canSelect));
             }
         }
-        list.sort(Comparator.comparing(RoundSummary::week).reversed());
+        // Ближайший тур — сверху: сначала текущая неделя и будущие по возрастанию,
+        // следом прошедшие, начиная с недавней. Раньше список шёл от дальнего будущего,
+        // и тур, на который как раз делают прогнозы, уезжал за нижний край экрана.
+        LocalDate current = time.currentWeek();
+        list.sort(Comparator.comparingLong((RoundSummary r) -> distanceKey(r.week(), current)));
         return list;
+    }
+
+    /**
+     * Расстояние тура от текущей недели для сортировки: будущее идёт по возрастанию,
+     * прошедшее — следом, начиная с самого недавнего.
+     */
+    static long distanceKey(LocalDate week, LocalDate current) {
+        long days = ChronoUnit.DAYS.between(current, week);
+        return days >= 0 ? days : PAST_OFFSET - days;
     }
 
     // ------------------------------------------------------------------ экран тура

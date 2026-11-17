@@ -125,7 +125,7 @@ public class MatchSelectionService {
             views.add(new SelectableMatch(m.getId(), names.display(m.getHomeTeam()),
                     names.display(m.getAwayTeam()), m.getHomeCrest(), m.getAwayCrest(),
                     m.getKickoffAt(),
-                    lockAt, m.getStage(), m.getMatchday(), m.getStatus(), m.isManual(),
+                    lockAt, StageLabels.of(m.getStage()), m.getMatchday(), m.getStatus(), m.isManual(),
                     selectedIds.contains(m.getId()),
                     RevealPolicy.locked(now, lockAt, m.getStatus()),
                     predicted.contains(m.getId()), m.getHomeScore(), m.getAwayScore()));

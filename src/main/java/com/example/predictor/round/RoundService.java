@@ -308,7 +308,7 @@ public class RoundService {
                     m.getCompetition() == null ? null : m.getCompetition().getShortName(),
                     m.getHomeCrest(), m.getAwayCrest(),
                     m.getKickoffAt(), lockAt,
-                    m.getStage(), m.getMatchday(), m.getStatus(),
+                    StageLabels.of(m.getStage()), m.getMatchday(), m.getStatus(),
                     counted ? m.scoreHome(info.basis()) : null, counted ? m.scoreAway(info.basis()) : null,
                     m.getLiveHome(), m.getLiveAway(),
                     detail, summaryOf(forMatch, mine, visible), info.kind().name(), decision, isOpen, locked, forMatch.size(), memberList.size(), myView, visible, others));

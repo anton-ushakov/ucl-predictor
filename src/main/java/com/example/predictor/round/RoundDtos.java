@@ -102,7 +102,8 @@ public final class RoundDtos {
                             boolean standingsFinal, List<StandingRow> standings,
                             List<String> buyers, List<String> receivers, List<String> notParticipated,
                             int pendingDecisions, int decisionsForMe, String note,
-                            boolean jokerEnabled, Long jokerMatchId, int liveMatches) {
+                            boolean jokerEnabled, Long jokerMatchId, int liveMatches,
+                            int roundNo, String title, Instant firstKickoff, Instant lastKickoff) {
     }
 
     /**
@@ -111,7 +112,8 @@ public final class RoundDtos {
      */
     public record RoundSummary(LocalDate week, RoundStatus status, int matches, int predictedByMe,
                                int openForMe, Instant firstKickoff, boolean selectable,
-                               int membersPredicted, int memberCount, boolean canSelect) {
+                               int membersPredicted, int memberCount, boolean canSelect,
+                               int roundNo, String title, Instant lastKickoff) {
     }
 
     public record Entry(@NotNull Long matchId,

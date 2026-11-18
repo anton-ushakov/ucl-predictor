@@ -75,6 +75,18 @@ public class RoundMatches {
         return all;
     }
 
+    /**
+     * Какому туру принадлежит матч: id матча → ключ тура. В неделе туров может быть
+     * несколько, поэтому неделя самого матча ответом больше не служит.
+     */
+    public Map<Long, LocalDate> roundKeys(Long groupId, LocalDate from, LocalDate to) {
+        Map<Long, LocalDate> keys = new LinkedHashMap<>();
+        for (RoundMatch rm : selection.findByGroupIdAndRoundWeekBetween(groupId, from, to)) {
+            keys.put(rm.getMatchId(), rm.getRoundWeek());
+        }
+        return keys;
+    }
+
     /** Недели, в которых у группы есть отобранные матчи, от новых к старым. */
     public List<LocalDate> weeks(Long groupId) {
         return selection.findWeeks(groupId);

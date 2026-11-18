@@ -11,7 +11,7 @@ import com.example.predictor.group.RulesService;
 import com.example.predictor.group.RulesService.Rules;
 import com.example.predictor.repository.FriendGroupRepository;
 import com.example.predictor.repository.GroupMemberRepository;
-import com.example.predictor.repository.GroupRound;
+import com.example.predictor.repository.GroupRoundKey;
 import com.example.predictor.repository.PredictionRepository;
 import com.example.predictor.repository.RoundResultRepository;
 import com.example.predictor.standings.StandingsCalculator;
@@ -74,8 +74,9 @@ public class RoundFinalizer {
     public int finalizeReadyRounds() {
         LocalDate currentWeek = time.currentWeek();
         int done = 0;
-        for (GroupRound gr : predictions.findGroupRounds()) {
-            if (gr.roundWeek().isAfter(currentWeek)) {
+        for (GroupRoundKey gr : predictions.findGroupRounds()) {
+            // ключ второго тура недели — день после понедельника, сравнивать нужно недели
+            if (RoundKeys.weekOf(gr.roundWeek()).isAfter(currentWeek)) {
                 continue;
             }
             if (results.existsByGroupIdAndRoundWeek(gr.groupId(), gr.roundWeek())) {

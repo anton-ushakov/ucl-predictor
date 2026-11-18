@@ -34,7 +34,16 @@ public final class SelectionDtos {
                                   String homeCrest, String awayCrest, Instant kickoffAt,
                                   Instant lockAt, String stage, Integer matchday, MatchStatus status,
                                   boolean manual, boolean selected, boolean locked,
-                                  boolean hasPredictions, Integer homeScore, Integer awayScore) {
+                                  boolean hasPredictions, Integer homeScore, Integer awayScore,
+                                  boolean inOtherRound) {
+    }
+
+    /**
+     * Тур недели, в который можно положить матчи. Матч живёт ровно в одном туре, поэтому
+     * сначала выбирают тур, а потом отмечают матчи.
+     */
+    public record RoundOption(LocalDate key, int no, String title, int matches,
+                              Instant firstKickoff, Instant lastKickoff) {
     }
 
     /** Экран отбора матчей: турниры, матчи выбранного турнира и что с ними можно делать. */
@@ -42,14 +51,30 @@ public final class SelectionDtos {
                                 boolean manualCompetition, boolean autoCompetition,
                                 int selectedInRound,
                                 List<CompetitionDto> competitions, List<SelectableMatch> matches,
-                                String note) {
+                                String note,
+                                LocalDate roundKey, int roundNo, String roundTitle,
+                                List<RoundOption> rounds) {
     }
 
     /** Автосостав турнира: его матчи попадают в тур сами. */
     public record AutoRequest(boolean enabled) {
     }
 
-    public record SelectRequest(@NotEmpty(message = "Не выбрано ни одного матча") List<Long> matchIds) {
+    /** roundKey: в какой тур недели класть матчи. Не указан — первый тур недели матча. */
+    public record SelectRequest(@NotEmpty(message = "Не выбрано ни одного матча") List<Long> matchIds,
+                                LocalDate roundKey) {
+    }
+
+    /** Новый тур в неделе: название необязательное. */
+    public record NewRoundRequest(@NotNull(message = "Укажите неделю") LocalDate week,
+                                  @Size(max = 60) String title) {
+    }
+
+    public record RenameRoundRequest(@Size(max = 60) String title) {
+    }
+
+    /** Созданный или переименованный тур. */
+    public record RoundInfo(LocalDate key, int no, String title, String message) {
     }
 
     /** Ручной матч: владелец вводит команды и время начала сам. */

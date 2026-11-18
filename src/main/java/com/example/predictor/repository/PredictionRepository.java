@@ -17,27 +17,36 @@ public interface PredictionRepository extends JpaRepository<Prediction, Long> {
     List<Prediction> findForMatches(@Param("groupId") Long groupId,
                                     @Param("matchIds") Collection<Long> matchIds);
 
-    /** Все прогнозы группы на матчи тура (с авторами и матчами). */
-    @Query("select p from Prediction p join fetch p.user join fetch p.match m "
-            + "where p.group.id = :groupId and m.roundWeek = :week")
+    /**
+     * Все прогнозы группы на матчи тура (с авторами и матчами).
+     *
+     * Тур определяется не неделей матча, а составом, который собрала группа: в одной неделе
+     * туров может быть несколько, и прогнозы соседнего тура сюда попадать не должны.
+     */
+    @Query("select p from Prediction p join fetch p.user join fetch p.match m, RoundMatch rm "
+            + "where rm.groupId = p.group.id and rm.matchId = m.id and rm.roundWeek = :week "
+            + "and p.group.id = :groupId")
     List<Prediction> findForRound(@Param("groupId") Long groupId, @Param("week") LocalDate week);
 
     /** Идентификаторы матчей, на которые пользователь уже сделал прогноз в группе, за период. */
-    @Query("select p.match.id from Prediction p "
-            + "where p.group.id = :groupId and p.user.id = :userId "
-            + "and p.match.roundWeek between :from and :to")
+    @Query("select p.match.id from Prediction p, RoundMatch rm "
+            + "where rm.groupId = p.group.id and rm.matchId = p.match.id "
+            + "and p.group.id = :groupId and p.user.id = :userId "
+            + "and rm.roundWeek between :from and :to")
     List<Long> findMatchIdsOfUser(@Param("groupId") Long groupId, @Param("userId") Long userId,
                                   @Param("from") LocalDate from, @Param("to") LocalDate to);
 
     /** Туры за период, на которые в группе есть хотя бы один прогноз. */
-    @Query("select distinct m.roundWeek from Prediction p join p.match m "
-            + "where p.group.id = :groupId and m.roundWeek between :from and :to")
+    @Query("select distinct rm.roundWeek from Prediction p, RoundMatch rm "
+            + "where rm.groupId = p.group.id and rm.matchId = p.match.id "
+            + "and p.group.id = :groupId and rm.roundWeek between :from and :to")
     List<LocalDate> findWeeksWithPredictions(@Param("groupId") Long groupId,
                                              @Param("from") LocalDate from, @Param("to") LocalDate to);
 
     /** Пары «участник, матч» по прогнозам группы за промежуток недель. */
-    @Query("select p.user.id, p.match.id from Prediction p "
-            + "where p.group.id = :groupId and p.match.roundWeek between :from and :to")
+    @Query("select p.user.id, p.match.id from Prediction p, RoundMatch rm "
+            + "where rm.groupId = p.group.id and rm.matchId = p.match.id "
+            + "and p.group.id = :groupId and rm.roundWeek between :from and :to")
     List<Object[]> findUserMatchPairs(@Param("groupId") Long groupId,
                                       @Param("from") LocalDate from,
                                       @Param("to") LocalDate to);
@@ -57,8 +66,9 @@ public interface PredictionRepository extends JpaRepository<Prediction, Long> {
     List<Long> findPredictedMatchIds(@Param("groupId") Long groupId,
                                      @Param("matchIds") Collection<Long> matchIds);
 
-    /** Все пары "группа и тур", где есть прогнозы. */
-    @Query("select new com.example.predictor.repository.GroupRound(p.group.id, m.roundWeek) "
-            + "from Prediction p join p.match m group by p.group.id, m.roundWeek")
-    List<GroupRound> findGroupRounds();
+    /** Все пары «группа и тур», где есть прогнозы. Тур — по составу группы, а не по неделе матча. */
+    @Query("select distinct new com.example.predictor.repository.GroupRoundKey(rm.groupId, rm.roundWeek) "
+            + "from Prediction p, RoundMatch rm "
+            + "where rm.groupId = p.group.id and rm.matchId = p.match.id")
+    List<GroupRoundKey> findGroupRounds();
 }

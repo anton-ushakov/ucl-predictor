@@ -137,17 +137,20 @@ public class NotificationGenerator {
     private void lockSoon(FriendGroup group, List<GroupMember> memberList,
                           Map<Long, NotificationSettings> wants, Instant now, List<Notification> out) {
         LocalDate from = time.currentWeek();
-        LocalDate to = time.lastPredictableWeek();
+        LocalDate to = time.lastRoundKey();
         Instant until = now.plus(LOCK_WARNING);
 
         // матчи, приём на которые закроется в ближайший час
         List<FootballMatch> soon = new ArrayList<>();
         Instant earliestLock = null;
+        // матч принадлежит туру, а не неделе: в неделе туров может быть несколько
+        Map<Long, LocalDate> keys = roundMatches.roundKeys(group.getId(), from, to);
         for (FootballMatch m : roundMatches.forRangeFlat(group.getId(), from, to)) {
             if (m.getStatus() != MatchStatus.SCHEDULED) {
                 continue;
             }
-            Instant lockAt = rulesService.rulesFor(group, m.getRoundWeek()).lockAt(m.getKickoffAt());
+            LocalDate roundKey = keys.getOrDefault(m.getId(), m.getRoundWeek());
+            Instant lockAt = rulesService.rulesFor(group, roundKey).lockAt(m.getKickoffAt());
             if (lockAt.isAfter(now) && !lockAt.isAfter(until)) {
                 soon.add(m);
                 if (earliestLock == null || lockAt.isBefore(earliestLock)) {
@@ -160,7 +163,7 @@ public class NotificationGenerator {
         }
 
         Set<LocalDate> weeks = new HashSet<>();
-        soon.forEach(m -> weeks.add(m.getRoundWeek()));
+        soon.forEach(m -> weeks.add(keys.getOrDefault(m.getId(), m.getRoundWeek())));
         // кто на какие матчи уже сохранил прогноз
         Map<Long, Set<Long>> predictedBy = new HashMap<>();
         for (LocalDate week : weeks) {
@@ -183,7 +186,8 @@ public class NotificationGenerator {
             }
             Text text = NotificationTexts.lockSoon(group.getName(), left);
             out.add(new Notification(userId, group.getId(), NotificationType.LOCK_SOON, key,
-                    text.title(), text.body(), soon.get(0).getRoundWeek(), now));
+                    text.title(), text.body(),
+                    keys.getOrDefault(soon.get(0).getId(), soon.get(0).getRoundWeek()), now));
         }
     }
 
@@ -198,16 +202,18 @@ public class NotificationGenerator {
 
         TeamNameMap teamLabels = teamNames.mapFor(group);
         Map<LocalDate, List<Prediction>> byWeek = new HashMap<>();
+        Map<Long, LocalDate> keys = roundMatches.roundKeys(group.getId(), from, to);
         for (FootballMatch m : roundMatches.forRangeFlat(group.getId(), from, to)) {
             if (!m.isFinished() || m.getKickoffAt().isBefore(freshSince)) {
                 continue;
             }
-            Rules rules = rulesService.rulesFor(group, m.getRoundWeek());
+            LocalDate roundKey = keys.getOrDefault(m.getId(), m.getRoundWeek());
+            Rules rules = rulesService.rulesFor(group, roundKey);
             ScoreBasis basis = rules.scoreBasis();
             if (!m.missingParts(basis).isEmpty()) {
                 continue; // ждём решения группы, какой счёт считать
             }
-            List<Prediction> roundPredictions = byWeek.computeIfAbsent(m.getRoundWeek(),
+            List<Prediction> roundPredictions = byWeek.computeIfAbsent(roundKey,
                     week -> predictions.findForRound(group.getId(), week));
 
             Map<Long, Prediction> mine = new HashMap<>();
@@ -234,7 +240,7 @@ public class NotificationGenerator {
                         teamLabels.display(m.getHomeTeam()), teamLabels.display(m.getAwayTeam()),
                         homeScore, awayScore, guess, points);
                 out.add(new Notification(userId, group.getId(), NotificationType.MATCH_FINISHED, key,
-                        text.title(), text.body(), m.getRoundWeek(), now));
+                        text.title(), text.body(), roundKey, now));
             }
         }
     }
@@ -248,21 +254,27 @@ public class NotificationGenerator {
         LocalDate to = time.currentWeek();
         Instant freshSince = now.minus(FRESH);
 
-        // матчи по игровым дням (по времени группы)
-        Map<LocalDate, List<FootballMatch>> byDay = new LinkedHashMap<>();
+        // матчи по игровым дням (по времени группы), каждый день в своём туре
+        Map<Long, LocalDate> keys = roundMatches.roundKeys(group.getId(), from, to);
+        Map<String, List<FootballMatch>> byDay = new LinkedHashMap<>();
+        Map<String, LocalDate> roundOfDay = new HashMap<>();
         for (FootballMatch m : roundMatches.forRangeFlat(group.getId(), from, to)) {
-            byDay.computeIfAbsent(m.getKickoffAt().atZone(time.zone()).toLocalDate(),
-                    d -> new ArrayList<>()).add(m);
+            LocalDate roundKey = keys.getOrDefault(m.getId(), m.getRoundWeek());
+            LocalDate day = m.getKickoffAt().atZone(time.zone()).toLocalDate();
+            String dayKey = roundKey + "/" + day;
+            byDay.computeIfAbsent(dayKey, d -> new ArrayList<>()).add(m);
+            roundOfDay.put(dayKey, roundKey);
         }
 
-        for (Map.Entry<LocalDate, List<FootballMatch>> e : byDay.entrySet()) {
+        for (Map.Entry<String, List<FootballMatch>> e : byDay.entrySet()) {
             List<FootballMatch> dayMatches = e.getValue();
+            LocalDate day = dayMatches.get(0).getKickoffAt().atZone(time.zone()).toLocalDate();
             boolean over = dayMatches.stream().allMatch(m -> m.getStatus().isTerminal());
             boolean fresh = dayMatches.stream().anyMatch(m -> !m.getKickoffAt().isBefore(freshSince));
             if (!over || !fresh) {
                 continue;
             }
-            LocalDate week = dayMatches.get(0).getRoundWeek();
+            LocalDate week = roundOfDay.get(e.getKey());
             Rules dayRules = rulesService.rulesFor(group, week);
             ScoreBasis basis = dayRules.scoreBasis();
             Scoring scoring = dayRules.scoring();
@@ -307,7 +319,7 @@ public class NotificationGenerator {
                         || !weekPoints.containsKey(userId)) {
                     continue; // тем, кто не участвует в туре, итоги дня не шлём
                 }
-                Text text = NotificationTexts.daySummary(group.getName(), e.getKey(),
+                Text text = NotificationTexts.daySummary(group.getName(), day,
                         dayPoints.getOrDefault(userId, 0), leaders, best);
                 out.add(new Notification(userId, group.getId(), NotificationType.SUMMARY, key,
                         text.title(), text.body(), week, now));

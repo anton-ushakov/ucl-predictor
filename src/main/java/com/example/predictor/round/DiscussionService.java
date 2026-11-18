@@ -9,7 +9,6 @@ import com.example.predictor.group.GroupAccess.Membership;
 import com.example.predictor.repository.GroupMemberRepository;
 import com.example.predictor.notify.DiscussionAlerts;
 import com.example.predictor.repository.RoundMessageRepository;
-import com.example.predictor.standings.RoundWeeks;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,7 +56,6 @@ public class DiscussionService {
     @Transactional(readOnly = true)
     public FeedDto feed(AppUser user, Long groupId, LocalDate week, Long afterId) {
         Membership ms = access.require(user, groupId);
-        requireMonday(week);
 
         List<RoundMessage> list = afterId == null
                 ? messages.findByGroupIdAndRoundWeekOrderByIdAsc(groupId, week)
@@ -75,7 +73,6 @@ public class DiscussionService {
     @Transactional
     public MessageDto write(AppUser user, Long groupId, LocalDate week, String text) {
         Membership ms = access.require(user, groupId);
-        requireMonday(week);
         String clean = text == null ? "" : text.trim();
         if (clean.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Сообщение пустое");
@@ -131,10 +128,4 @@ public class DiscussionService {
                 !m.isDeleted() && (mine || iAmOwner));
     }
 
-    private static void requireMonday(LocalDate week) {
-        if (!RoundWeeks.mondayOf(week).equals(week)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Тур обозначается датой понедельника, например 2026-11-09");
-        }
-    }
 }

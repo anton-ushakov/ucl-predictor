@@ -1,0 +1,81 @@
+package com.example.predictor.domain;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import java.time.Instant;
+import java.time.LocalDate;
+
+/**
+ * Тур группы.
+ *
+ * Ключ тура — дата: для первого тура недели это её понедельник, для второго вторник той же
+ * недели, и так далее. Участник этих дат не видит: в приложении тур подписан датами своих
+ * матчей и названием, если его задали.
+ */
+@Entity
+@Table(name = "group_rounds")
+public class GroupRound {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "group_id", nullable = false)
+    private Long groupId;
+
+    @Column(name = "round_key", nullable = false)
+    private LocalDate roundKey;
+
+    @Column(name = "title", length = 60)
+    private String title;
+
+    @Column(name = "created_at", nullable = false)
+    private Instant createdAt;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
+    protected GroupRound() {
+    }
+
+    public GroupRound(Long groupId, LocalDate roundKey, String title, Instant createdAt,
+                      Long createdBy) {
+        this.groupId = groupId;
+        this.roundKey = roundKey;
+        this.title = title;
+        this.createdAt = createdAt;
+        this.createdBy = createdBy;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public Long getGroupId() {
+        return groupId;
+    }
+
+    public LocalDate getRoundKey() {
+        return roundKey;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void rename(String title) {
+        this.title = title;
+    }
+
+    public Instant getCreatedAt() {
+        return createdAt;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
+    }
+}

@@ -24,7 +24,6 @@ import com.example.predictor.repository.RoundResultRepository;
 import com.example.predictor.round.RoundDtos.*;
 import com.example.predictor.round.SubmissionValidator.SubmissionException;
 import com.example.predictor.scoring.Scoring;
-import com.example.predictor.standings.RoundWeeks;
 import com.example.predictor.standings.StandingsCalculator;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -76,13 +75,16 @@ public class RoundService {
     private final TeamNamesService teamNames;
     private final JokerService jokerService;
     private final LeaderService leaderService;
+    private final com.example.predictor.repository.GroupRoundRepository groupRounds;
 
     public RoundService(GroupAccess access, RulesService rulesService,
                         PredictionRepository predictions, RoundResultRepository results,
                         GroupMemberRepository members, AppUserRepository users, AppTime time,
                         ScoreDecisionService decisionService, RoundMatches roundMatches,
                         JokerService jokerService, LeaderService leaderService,
-                        TeamNamesService teamNames) {
+                        TeamNamesService teamNames,
+                        com.example.predictor.repository.GroupRoundRepository groupRounds) {
+        this.groupRounds = groupRounds;
         this.teamNames = teamNames;
         this.roundMatches = roundMatches;
         this.jokerService = jokerService;
@@ -107,20 +109,30 @@ public class RoundService {
         boolean canSelect = GroupAccess.canSelectMatches(ms);
         LocalDate from = time.currentWeek().minusWeeks(HISTORY_WEEKS_BACK);
         LocalDate to = time.lastPredictableWeek();
+        // туры ищем по ключам: у второго тура недели ключ — день после понедельника
+        LocalDate keysTo = time.lastRoundKey();
 
         // в тур входят только матчи, отобранные владельцем группы
-        Map<LocalDate, List<FootballMatch>> byWeek = roundMatches.forRange(groupId, from, to);
-        Set<Long> mine = new HashSet<>(predictions.findMatchIdsOfUser(groupId, user.getId(), from, to));
+        Map<LocalDate, List<FootballMatch>> byWeek = roundMatches.forRange(groupId, from, keysTo);
+        Set<Long> mine = new HashSet<>(predictions.findMatchIdsOfUser(groupId, user.getId(), from, keysTo));
         Set<LocalDate> weeksWithPredictions =
-                new HashSet<>(predictions.findWeeksWithPredictions(groupId, from, to));
+                new HashSet<>(predictions.findWeeksWithPredictions(groupId, from, keysTo));
         Set<LocalDate> finalized = new HashSet<>(results.findFinalizedWeeks(groupId));
         Instant now = Instant.now();
 
         // кто на какие матчи уже сделал прогноз: по этому видно, все ли готовы к туру
         List<GroupMember> memberList = members.findAllWithUser(groupId);
         Map<Long, Set<Long>> matchesByUser = new HashMap<>();
-        for (Object[] pair : predictions.findUserMatchPairs(groupId, from, to)) {
+        for (Object[] pair : predictions.findUserMatchPairs(groupId, from, keysTo)) {
             matchesByUser.computeIfAbsent((Long) pair[0], k -> new HashSet<>()).add((Long) pair[1]);
+        }
+
+        // названия туров: их задают те, кто собирает состав
+        Map<LocalDate, String> titles = new HashMap<>();
+        for (com.example.predictor.domain.GroupRound round
+                : groupRounds.findByGroupIdAndRoundKeyBetweenOrderByRoundKeyAsc(groupId, from,
+                keysTo)) {
+            titles.put(round.getRoundKey(), round.getTitle());
         }
 
         List<RoundSummary> list = new ArrayList<>();
@@ -162,12 +174,15 @@ public class RoundService {
                     ready++;
                 }
             }
+            Instant lastKickoff = e.getValue().get(e.getValue().size() - 1).getKickoffAt();
             list.add(new RoundSummary(week,
                     RoundStatus.of(finalized.contains(week), started, allOver,
                             weeksWithPredictions.contains(week)),
                     e.getValue().size(), predicted, open, e.getValue().get(0).getKickoffAt(),
-                    !week.isBefore(time.currentWeek()) && !week.isAfter(to),
-                    ready, memberList.size(), canSelect));
+                    !RoundKeys.weekOf(week).isBefore(time.currentWeek())
+                            && !RoundKeys.weekOf(week).isAfter(to),
+                    ready, memberList.size(), canSelect,
+                    RoundKeys.noOf(week), titles.get(week), lastKickoff));
         }
 
         // Текущая и следующая недели показываются всегда, даже если владелец ещё не выбрал матчи:
@@ -175,7 +190,7 @@ public class RoundService {
         for (LocalDate week = time.currentWeek(); !week.isAfter(to); week = week.plusWeeks(1)) {
             if (!byWeek.containsKey(week)) {
                 list.add(new RoundSummary(week, RoundStatus.UPCOMING, 0, 0, 0, null, true,
-                        0, memberList.size(), canSelect));
+                        0, memberList.size(), canSelect, 1, titles.get(week), null));
             }
         }
         // Ближайший тур — сверху: сначала текущая неделя и будущие по возрастанию,
@@ -201,7 +216,7 @@ public class RoundService {
     public RoundView view(AppUser user, Long groupId, LocalDate week) {
         Membership ms = access.require(user, groupId);
         FriendGroup group = ms.group();
-        requireMonday(week);
+        requireRoundKey(week);
 
         List<FootballMatch> weekMatches = roundMatches.forRound(groupId, week);
         if (weekMatches.isEmpty()) {
@@ -358,7 +373,7 @@ public class RoundService {
             }
         }
 
-        boolean canSubmit = open > 0 && !week.isAfter(time.lastPredictableWeek());
+        boolean canSubmit = open > 0 && !RoundKeys.weekOf(week).isAfter(time.lastPredictableWeek());
         RoundStatus status = RoundStatus.of(finalized, started, allOver, !all.isEmpty());
         String note = status == RoundStatus.NO_PREDICTIONS
                 ? "Тур завершён. Никто из участников не делал прогнозов, поэтому итоги не подводились."
@@ -376,7 +391,12 @@ public class RoundService {
                         rules.scoring().outcomePoints(), rules.scoring().describe(), frozen),
                 views, canSubmit, open, submitWarning(rules.submissionMode()), finalized, standings, buyers, receivers,
                 notParticipated, ScoreDecisionService.countPending(infos.values()), decisionsForMe, note,
-                group.isJokerEnabled(), jokers.get(me), liveMatches);
+                group.isJokerEnabled(), jokers.get(me), liveMatches,
+                RoundKeys.noOf(week),
+                groupRounds.findByGroupIdAndRoundKey(groupId, week)
+                        .map(com.example.predictor.domain.GroupRound::getTitle).orElse(null),
+                weekMatches.get(0).getKickoffAt(),
+                weekMatches.get(weekMatches.size() - 1).getKickoffAt());
     }
 
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,
@@ -443,8 +463,8 @@ public class RoundService {
     public SubmitResult submit(AppUser user, Long groupId, LocalDate week, SubmitRequest request) {
         Membership ms = access.require(user, groupId);
         FriendGroup group = ms.group();
-        requireMonday(week);
-        if (week.isAfter(time.lastPredictableWeek())) {
+        requireRoundKey(week);
+        if (RoundKeys.weekOf(week).isAfter(time.lastPredictableWeek())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Приём прогнозов на этот тур ещё не открыт: можно прогнозировать текущую и следующую неделю");
         }
@@ -564,10 +584,13 @@ public class RoundService {
         return result;
     }
 
-    private static void requireMonday(LocalDate week) {
-        if (!RoundWeeks.mondayOf(week).equals(week)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Тур обозначается датой понедельника, например 2026-11-02");
+    /**
+     * Ключ тура — дата. Обычно это понедельник недели, но если в неделе несколько туров,
+     * второй и следующие обозначаются ближайшими днями той же недели.
+     */
+    private static void requireRoundKey(LocalDate week) {
+        if (week == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Тур не указан");
         }
     }
 }

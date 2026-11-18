@@ -56,9 +56,33 @@ public class SelectionController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @PathVariable("groupId") Long groupId,
             @PathVariable("week") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate week,
+            @RequestParam(value = "roundKey", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate roundKey,
             @RequestParam(value = "competitionId", required = false) Long competitionId) {
         AppUser user = auth.authenticate(authorization);
-        return service.selectable(user, groupId, week, competitionId);
+        return service.selectable(user, groupId, week, roundKey, competitionId);
+    }
+
+    /** Новый тур в неделе: отдельный зачёт и отдельная шаурма. */
+    @PostMapping("/rounds")
+    @ResponseStatus(HttpStatus.CREATED)
+    public SelectionDtos.RoundInfo createRound(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @Valid @RequestBody SelectionDtos.NewRoundRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        return service.createRound(user, groupId, request.week(), request.title());
+    }
+
+    /** Название тура: пустое — тур снова подписан датами своих матчей. */
+    @PutMapping("/rounds/{roundKey}/title")
+    public SelectionDtos.RoundInfo renameRound(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("roundKey") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate roundKey,
+            @Valid @RequestBody SelectionDtos.RenameRoundRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        return service.renameRound(user, groupId, roundKey, request.title());
     }
 
     /** Добавить отмеченные матчи в тур. Неделя тура берётся у самих матчей. */
@@ -68,7 +92,7 @@ public class SelectionController {
                                @PathVariable("groupId") Long groupId,
                                @Valid @RequestBody SelectRequest request) {
         AppUser user = auth.authenticate(authorization);
-        return service.add(user, groupId, request.matchIds());
+        return service.add(user, groupId, request.matchIds(), request.roundKey());
     }
 
     /** Убрать матч из тура (пока на него нет прогнозов). */

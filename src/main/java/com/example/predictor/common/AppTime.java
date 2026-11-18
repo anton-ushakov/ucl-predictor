@@ -37,4 +37,12 @@ public class AppTime {
     public LocalDate lastPredictableWeek() {
         return currentWeek().plusWeeks(weeksAhead);
     }
+
+    /**
+     * Верхняя граница для ключей туров. В неделе может быть несколько туров, и ключ второго
+     * и следующих — это дни после понедельника, поэтому диапазон по ключам шире, чем по неделям.
+     */
+    public java.time.LocalDate lastRoundKey() {
+        return lastPredictableWeek().plusDays(6);
+    }
 }

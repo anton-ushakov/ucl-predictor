@@ -229,7 +229,7 @@ public class SeasonReportService {
             }
         }
         who.sort(Comparator.naturalOrder());
-        out.add(new Nomination("Точный глаз", String.join(", ", who),
+        out.add(new Nomination("Точный счёт", String.join(", ", who),
                 best + " " + exactWord(best)));
     }
 

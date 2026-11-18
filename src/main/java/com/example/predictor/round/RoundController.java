@@ -125,7 +125,7 @@ public class RoundController {
         return reports.form(user, groupId, seasonId);
     }
 
-    /** Итоги сезона: чемпион, лучший тур, точный глаз, серия побед. */
+    /** Итоги сезона: чемпион, лучший тур, точный счёт, серия побед. */
     @GetMapping("/finale")
     public SeasonReportService.FinaleView finale(
             @RequestHeader(value = "Authorization", required = false) String authorization,

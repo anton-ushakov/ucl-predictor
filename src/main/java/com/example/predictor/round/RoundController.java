@@ -28,9 +28,12 @@ public class RoundController {
     private final HistoryService history;
     private final ScoreDecisionService decisions;
     private final SeasonService seasons;
+    private final SeasonReportService reports;
 
     public RoundController(AuthService auth, RoundService rounds, HistoryService history,
-                           ScoreDecisionService decisions, SeasonService seasons) {
+                           ScoreDecisionService decisions, SeasonService seasons,
+                           SeasonReportService reports) {
+        this.reports = reports;
         this.seasons = seasons;
         this.decisions = decisions;
         this.auth = auth;
@@ -110,6 +113,26 @@ public class RoundController {
                                        @RequestParam(value = "seasonId", required = false) Long seasonId) {
         AppUser user = auth.authenticate(authorization);
         return history.leaderboard(user, groupId, seasonId);
+    }
+
+    /** Ход сезона тур за туром: линии для графика формы. */
+    @GetMapping("/form")
+    public SeasonReportService.FormView form(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @RequestParam(value = "seasonId", required = false) Long seasonId) {
+        AppUser user = auth.authenticate(authorization);
+        return reports.form(user, groupId, seasonId);
+    }
+
+    /** Итоги сезона: чемпион, лучший тур, точный глаз, серия побед. */
+    @GetMapping("/finale")
+    public SeasonReportService.FinaleView finale(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @RequestParam(value = "seasonId", required = false) Long seasonId) {
+        AppUser user = auth.authenticate(authorization);
+        return reports.finale(user, groupId, seasonId);
     }
 
     /** Сезоны группы: по ним режется общий зачёт. */

@@ -232,6 +232,47 @@ public class QuestionService {
         return bonus;
     }
 
+    /**
+     * То же самое, но с разбивкой по турам: неделя → (userId → баллы). Нужно графику формы,
+     * иначе линия расходилась бы с таблицей зачёта там, где были вопросы.
+     */
+    @Transactional(readOnly = true)
+    public Map<LocalDate, Map<Long, Integer>> bonusByWeek(Long groupId, LocalDate from, LocalDate to) {
+        Map<Long, LocalDate> weekOf = new HashMap<>();
+        Map<Long, Integer> pointsOf = new HashMap<>();
+        List<Long> ids = new ArrayList<>();
+        for (TournamentQuestion q : questions.findByGroupIdOrderByClosesAtDescIdDesc(groupId)) {
+            if (!q.isSettled()) {
+                continue;
+            }
+            if (from != null && q.getRoundWeek().isBefore(from)) {
+                continue;
+            }
+            if (to != null && q.getRoundWeek().isAfter(to)) {
+                continue;
+            }
+            weekOf.put(q.getId(), q.getRoundWeek());
+            pointsOf.put(q.getId(), q.getPoints());
+            ids.add(q.getId());
+        }
+        Map<LocalDate, Map<Long, Integer>> byWeek = new HashMap<>();
+        if (ids.isEmpty()) {
+            return byWeek;
+        }
+        for (QuestionAnswer a : answers.findByQuestionIdIn(ids)) {
+            if (!a.isCorrect()) {
+                continue;
+            }
+            LocalDate week = weekOf.get(a.getQuestionId());
+            if (week == null) {
+                continue;
+            }
+            byWeek.computeIfAbsent(week, k -> new HashMap<>())
+                    .merge(a.getUserId(), pointsOf.getOrDefault(a.getQuestionId(), 0), Integer::sum);
+        }
+        return byWeek;
+    }
+
     private TournamentQuestion require(Long groupId, Long questionId) {
         TournamentQuestion question = questions.findById(questionId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Вопрос не найден"));

@@ -26,6 +26,9 @@ public class NotificationSettings {
     @Column(nullable = false)
     private boolean chat = true;
 
+    @Column(name = "polls", nullable = false)
+    private boolean polls = true;
+
     protected NotificationSettings() {
     }
 
@@ -34,12 +37,13 @@ public class NotificationSettings {
     }
 
     public void change(boolean lockSoon, boolean matchFinished, boolean summary,
-                       boolean discussion, boolean chat) {
+                       boolean discussion, boolean chat, boolean polls) {
         this.lockSoon = lockSoon;
         this.matchFinished = matchFinished;
         this.summary = summary;
         this.discussion = discussion;
         this.chat = chat;
+        this.polls = polls;
     }
 
     public boolean wants(NotificationType type) {
@@ -49,6 +53,7 @@ public class NotificationSettings {
             case SUMMARY -> summary;
             case DISCUSSION -> discussion;
             case CHAT -> chat;
+            case POLL -> polls;
             // о новой версии сообщаем всегда: выключать это участнику нечего
             case APP_UPDATE -> true;
             // без выбранных матчей тура не будет: владельцу напоминаем всегда
@@ -62,4 +67,5 @@ public class NotificationSettings {
     public boolean isSummary() { return summary; }
     public boolean isDiscussion() { return discussion; }
     public boolean isChat() { return chat; }
+    public boolean isPolls() { return polls; }
 }

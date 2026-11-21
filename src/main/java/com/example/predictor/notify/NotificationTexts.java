@@ -130,6 +130,13 @@ public final class NotificationTexts {
         return new Text("Чат · " + groupName, body.toString());
     }
 
+    /** Новое голосование в группе. */
+    public static Text poll(String groupName, String author, String question) {
+        String who = author == null || author.isBlank() ? "Кто-то" : author;
+        return new Text("Голосование · " + groupName,
+                who + " спрашивает: " + shorten(question, 120));
+    }
+
     private static String shorten(String text, int max) {
         String one = text.replace('\n', ' ').trim();
         return one.length() <= max ? one : one.substring(0, max - 1) + "…";

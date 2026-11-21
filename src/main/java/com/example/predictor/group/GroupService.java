@@ -68,7 +68,9 @@ public class GroupService {
                                  List<OptionDto> availableSubmissionModes,
                                  List<OptionDto> availableMatchSelections, String settingsNote,
                                  /** Сколько сообщений в чате группы участник ещё не читал. */
-                                 long chatUnread) {
+                                 long chatUnread,
+                                 /** Сколько идущих голосований ждёт его голоса. */
+                                 long pollsWaiting) {
     }
 
     private static final String SETTINGS_NOTE =
@@ -84,13 +86,16 @@ public class GroupService {
     private final PasswordResetRepository passwordResets;
     private final com.example.predictor.round.LeaderService leaderService;
     private final com.example.predictor.chat.ChatService chat;
+    private final com.example.predictor.repository.GroupPollRepository polls;
 
     public GroupService(FriendGroupRepository groups, GroupMemberRepository members,
                         AppUserRepository users, GroupAccess access, AuthModeConfig authMode,
                         AuthService auth, PasswordResetRepository passwordResets,
                         com.example.predictor.round.LeaderService leaderService,
-                        com.example.predictor.chat.ChatService chat) {
+                        com.example.predictor.chat.ChatService chat,
+                        com.example.predictor.repository.GroupPollRepository polls) {
         this.chat = chat;
+        this.polls = polls;
         this.leaderService = leaderService;
         this.authMode = authMode;
         this.auth = auth;
@@ -168,7 +173,8 @@ public class GroupService {
                 .map(m -> new OptionDto(m.name(), m.getDescription())).toList();
         return new GroupDetailDto(g.getId(), g.getName(), visibleInviteCode(g), ms.member().getRole(),
                 memberDtos, settings, tiebreakerOptions, revealOptions, submissionOptions,
-                selectionOptions, SETTINGS_NOTE, chat.unread(groupId, current.getId()));
+                selectionOptions, SETTINGS_NOTE, chat.unread(groupId, current.getId()),
+                polls.countWaitingFor(groupId, current.getId(), java.time.Instant.now()));
     }
 
     /** Только владелец. Прогнозы это не затрагивает: их не может изменить никто. */

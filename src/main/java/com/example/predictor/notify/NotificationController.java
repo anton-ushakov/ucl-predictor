@@ -22,7 +22,8 @@ public class NotificationController {
     public record UpdateSettingsRequest(@NotNull Boolean lockSoon,
                                         @NotNull Boolean matchFinished,
                                         @NotNull Boolean summary,
-                                        Boolean discussion, Boolean chat) {
+                                        Boolean discussion, Boolean chat,
+                                        Boolean polls) {
     }
 
     private final AuthService auth;
@@ -65,7 +66,8 @@ public class NotificationController {
         // старое приложение этих полей не присылает: считаем их включёнными
         boolean discussion = request.discussion() == null || request.discussion();
         boolean chat = request.chat() == null || request.chat();
+        boolean polls = request.polls() == null || request.polls();
         return notifications.updateSettings(user, request.lockSoon(), request.matchFinished(),
-                request.summary(), discussion, chat);
+                request.summary(), discussion, chat, polls);
     }
 }

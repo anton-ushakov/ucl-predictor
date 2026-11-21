@@ -352,9 +352,13 @@ public class RoundService {
                     leaders);
         }
 
+        boolean friendly = groupRounds.findByGroupIdAndRoundKey(groupId, week)
+                .map(com.example.predictor.domain.GroupRound::isFriendly).orElse(false);
+
+        // в товарищеском туре победитель есть, а шаурмы нет: списки «кто кормит» пусты
         List<String> buyers = new ArrayList<>();
         List<String> receivers = new ArrayList<>();
-        if (finalized) {
+        if (finalized && !friendly) {
             for (StandingRow r : standings) {
                 if (r.loser()) {
                     buyers.add(r.username());
@@ -403,8 +407,7 @@ public class RoundService {
                         .map(com.example.predictor.domain.GroupRound::getTitle).orElse(null),
                 weekMatches.get(0).getKickoffAt(),
                 weekMatches.get(weekMatches.size() - 1).getKickoffAt(),
-                groupRounds.findByGroupIdAndRoundKey(groupId, week)
-                        .map(com.example.predictor.domain.GroupRound::isFriendly).orElse(false));
+                friendly);
     }
 
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,

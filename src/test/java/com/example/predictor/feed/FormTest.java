@@ -9,9 +9,9 @@ import org.junit.jupiter.api.Test;
 class FormTest {
 
     @Test
-    void lettersBecomeRussian() {
-        assertEquals("В В Н П В", StandingsService.form("W,W,D,L,W"));
-        assertEquals("П", StandingsService.form("L"));
+    void lettersAreKeptForTheDots() {
+        assertEquals("WWDLW", StandingsService.form("W,W,D,L,W"));
+        assertEquals("L", StandingsService.form("L"));
     }
 
     @Test
@@ -23,6 +23,6 @@ class FormTest {
 
     @Test
     void unknownLettersAreSkipped() {
-        assertEquals("В Н", StandingsService.form("W,X,D"));
+        assertEquals("WD", StandingsService.form("W,X,D"));
     }
 }

@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class StandingsService {
 
-    /** Форма: последние матчи в виде «В Н П», уже по-русски. */
+    /** Форма: последние матчи буквами W (выигрыш), D (ничья), L (поражение) — «WWDLW». */
     public record RowDto(int position, String team, String crest, int played, int won, int draw,
                          int lost, int goalsFor, int goalsAgainst, int points, String form) {
     }
@@ -99,23 +99,18 @@ public class StandingsService {
                 "Таблица турнира приходит от источника и обновляется раз в час.");
     }
 
-    /** «W,W,D,L,W» → «В В Н П В»: по-русски и без запятых. */
+    /**
+     * «W,W,D,L,W» → «WWDLW»: приложение рисует это кружками, зелёным, жёлтым и красным,
+     * поэтому буквы нужны ему как есть, без запятых и без перевода.
+     */
     public static String form(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
         }
         StringBuilder out = new StringBuilder();
         for (String part : raw.split(",")) {
-            String letter = switch (part.trim().toUpperCase()) {
-                case "W" -> "В";
-                case "D" -> "Н";
-                case "L" -> "П";
-                default -> "";
-            };
-            if (!letter.isEmpty()) {
-                if (out.length() > 0) {
-                    out.append(' ');
-                }
+            String letter = part.trim().toUpperCase();
+            if (letter.equals("W") || letter.equals("D") || letter.equals("L")) {
                 out.append(letter);
             }
         }

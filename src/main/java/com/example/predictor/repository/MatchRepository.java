@@ -80,4 +80,14 @@ public interface MatchRepository extends JpaRepository<FootballMatch, Long> {
     List<FootballMatch> findByStatusAndKickoffAtBetweenOrderByKickoffAtAsc(
             com.example.predictor.domain.MatchStatus status, java.time.Instant from,
             java.time.Instant to);
+
+    /**
+     * Сыгранные матчи этих команд, свежие сверху: по ним считается форма, когда источник
+     * её не присылает.
+     */
+    @Query("select m from FootballMatch m where m.status = com.example.predictor.domain.MatchStatus.FINISHED "
+            + "and m.homeScore is not null "
+            + "and (m.homeTeam in :teams or m.awayTeam in :teams) "
+            + "order by m.kickoffAt desc")
+    List<FootballMatch> findFinishedOf(@Param("teams") Collection<String> teams);
 }

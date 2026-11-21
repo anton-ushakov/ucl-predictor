@@ -37,15 +37,39 @@ public class StandingsService {
     public record CompetitionDto(Long id, String name, String shortName, boolean hasTable) {
     }
 
-    public record TablesView(List<CompetitionDto> competitions, TableDto table, String note) {
+    public record TablesView(List<CompetitionDto> competitions, TableDto table, String note,
+                             boolean amAdmin) {
     }
 
     private final CompetitionRepository competitions;
     private final StandingRowRepository standings;
+    private final TeamFormService teamForm;
+    private final ExtraDataSyncService extra;
+    private final com.example.predictor.common.AdminAccess admins;
 
-    public StandingsService(CompetitionRepository competitions, StandingRowRepository standings) {
+    public StandingsService(CompetitionRepository competitions, StandingRowRepository standings,
+                            TeamFormService teamForm, ExtraDataSyncService extra,
+                            com.example.predictor.common.AdminAccess admins) {
         this.competitions = competitions;
         this.standings = standings;
+        this.teamForm = teamForm;
+        this.extra = extra;
+        this.admins = admins;
+    }
+
+    /**
+     * Обновить таблицы сейчас, не дожидаясь часа. Только владельцу приложения: это запросы
+     * к источнику, а их на бесплатном ключе десять в минуту.
+     */
+    public String refresh(AppUser user) {
+        admins.require(user);
+        int tables = extra.syncStandings();
+        int pairs = extra.syncHeadToHead();
+        if (tables == 0 && pairs == 0) {
+            return "Источник ничего не отдал: похоже, таблицы на этом ключе недоступны или "
+                    + "исчерпан лимит запросов. Загляните в журнал сервера.";
+        }
+        return "Обновлено таблиц: " + tables + ", личных встреч: " + pairs;
     }
 
     @Transactional(readOnly = true)
@@ -57,36 +81,69 @@ public class StandingsService {
             counts.merge(row.getCompetitionId(), 1, Integer::sum);
         }
 
+        // показываем все турниры, которые загружаются автоматически: если таблицы ещё нет,
+        // честнее сказать об этом, чем молча спрятать турнир
         List<CompetitionDto> dtos = new ArrayList<>();
         Competition chosen = null;
+        Competition firstWithTable = null;
         for (Competition c : all) {
-            boolean has = counts.getOrDefault(c.getId(), 0) > 0;
-            if (has) {
-                dtos.add(new CompetitionDto(c.getId(), c.getName(), c.getShortName(), true));
-                if (chosen == null && (competitionId == null || c.getId().equals(competitionId))) {
-                    chosen = c;
-                }
+            if (!c.isSynced()) {
+                continue;
             }
+            boolean has = counts.getOrDefault(c.getId(), 0) > 0;
+            dtos.add(new CompetitionDto(c.getId(), c.getName(), c.getShortName(), has));
+            if (competitionId != null && c.getId().equals(competitionId)) {
+                chosen = c;
+            }
+            if (has && firstWithTable == null) {
+                firstWithTable = c;
+            }
+        }
+        if (chosen == null) {
+            chosen = firstWithTable;
         }
         if (chosen == null) {
             return new TablesView(dtos, null,
                     "Таблиц пока нет: они приходят от источника раз в час и только для "
-                            + "турниров, которые загружаются автоматически.");
+                            + "турниров, которые загружаются автоматически.",
+                    admins.isAdmin(user));
         }
-        return new TablesView(dtos, table(chosen), null);
+        TableDto table = table(chosen);
+        if (table.groups().isEmpty()) {
+            return new TablesView(dtos,
+                    new TableDto(chosen.getId(), chosen.getName(), List.of(), null,
+                            "Таблица этого турнира ещё не пришла. Она обновляется раз в час; "
+                                    + "у кубковых турниров её может не быть вовсе."),
+                    null, admins.isAdmin(user));
+        }
+        return new TablesView(dtos, table, null, admins.isAdmin(user));
     }
 
     private TableDto table(Competition competition) {
+        List<StandingRowEntity> rows =
+                standings.findByCompetitionIdOrderByGroupLabelAscPositionAsc(competition.getId());
+
+        // форму источник присылает не всегда: чего нет, считаем по своим матчам
+        List<String> withoutForm = new ArrayList<>();
+        for (StandingRowEntity row : rows) {
+            if (form(row.getForm()) == null) {
+                withoutForm.add(row.getTeamName());
+            }
+        }
+        Map<String, String> computed = teamForm.formOf(withoutForm);
+
         Map<String, List<RowDto>> byGroup = new LinkedHashMap<>();
         Instant updated = null;
-        for (StandingRowEntity row
-                : standings.findByCompetitionIdOrderByGroupLabelAscPositionAsc(competition.getId())) {
+        for (StandingRowEntity row : rows) {
             String group = row.getGroupLabel() == null ? "" : row.getGroupLabel();
+            String rowForm = form(row.getForm());
+            if (rowForm == null) {
+                rowForm = computed.get(row.getTeamName());
+            }
             byGroup.computeIfAbsent(group, k -> new ArrayList<>())
                     .add(new RowDto(row.getPosition(), row.getTeamName(), row.getCrest(),
                             row.getPlayed(), row.getWon(), row.getDraw(), row.getLost(),
-                            row.getGoalsFor(), row.getGoalsAgainst(), row.getPoints(),
-                            form(row.getForm())));
+                            row.getGoalsFor(), row.getGoalsAgainst(), row.getPoints(), rowForm));
             if (updated == null || row.getUpdatedAt().isAfter(updated)) {
                 updated = row.getUpdatedAt();
             }

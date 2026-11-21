@@ -78,6 +78,7 @@ public class RoundService {
     private final com.example.predictor.repository.GroupRoundRepository groupRounds;
     private final com.example.predictor.repository.StandingRowRepository standingRows;
     private final com.example.predictor.repository.HeadToHeadRepository headToHead;
+    private final com.example.predictor.feed.TeamFormService teamForm;
 
     public RoundService(GroupAccess access, RulesService rulesService,
                         PredictionRepository predictions, RoundResultRepository results,
@@ -87,7 +88,9 @@ public class RoundService {
                         TeamNamesService teamNames,
                         com.example.predictor.repository.GroupRoundRepository groupRounds,
                         com.example.predictor.repository.StandingRowRepository standingRows,
-                        com.example.predictor.repository.HeadToHeadRepository headToHead) {
+                        com.example.predictor.repository.HeadToHeadRepository headToHead,
+                        com.example.predictor.feed.TeamFormService teamForm) {
+        this.teamForm = teamForm;
         this.groupRounds = groupRounds;
         this.standingRows = standingRows;
         this.headToHead = headToHead;
@@ -620,16 +623,26 @@ public class RoundService {
             }
         }
         Map<String, String> forms = new HashMap<>();
-        if (competitionIds.isEmpty()) {
-            return forms;
-        }
-        for (com.example.predictor.domain.StandingRowEntity row
-                : standingRows.findByCompetitionIdIn(new ArrayList<>(competitionIds))) {
-            String form = com.example.predictor.feed.StandingsService.form(row.getForm());
-            if (form != null) {
-                forms.put(row.getTeamName(), form);
+        if (!competitionIds.isEmpty()) {
+            for (com.example.predictor.domain.StandingRowEntity row
+                    : standingRows.findByCompetitionIdIn(new ArrayList<>(competitionIds))) {
+                String form = com.example.predictor.feed.StandingsService.form(row.getForm());
+                if (form != null) {
+                    forms.put(row.getTeamName(), form);
+                }
             }
         }
+        // чего источник не прислал, считаем сами по сыгранным матчам
+        Set<String> missing = new java.util.LinkedHashSet<>();
+        for (FootballMatch m : weekMatches) {
+            if (!forms.containsKey(m.getHomeTeam())) {
+                missing.add(m.getHomeTeam());
+            }
+            if (!forms.containsKey(m.getAwayTeam())) {
+                missing.add(m.getAwayTeam());
+            }
+        }
+        forms.putAll(teamForm.formOf(missing));
         return forms;
     }
 

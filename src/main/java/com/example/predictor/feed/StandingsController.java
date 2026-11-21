@@ -23,4 +23,15 @@ public class StandingsController {
         AppUser user = auth.authenticate(authorization);
         return standings.view(user, competitionId);
     }
+
+    /** Обновить таблицы сейчас: кнопка владельца приложения. */
+    @PostMapping("/api/tables/refresh")
+    public MessageDto refresh(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        AppUser user = auth.authenticate(authorization);
+        return new MessageDto(standings.refresh(user));
+    }
+
+    public record MessageDto(String message) {
+    }
 }

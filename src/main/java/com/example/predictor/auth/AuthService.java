@@ -89,6 +89,7 @@ public class AuthService {
         AppUser user = users.findByUsernameIgnoreCase(normalizeUsername(username))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Нет участника с таким именем"));
+        requireOpen(user);
         Instant now = Instant.now();
 
         if (!user.hasPin()) {
@@ -212,6 +213,7 @@ public class AuthService {
         if (!encoder.matches(password, user.getPasswordHash())) {
             throw badCredentials();
         }
+        requireOpen(user);
         return issueToken(user, null);
     }
 
@@ -315,7 +317,23 @@ public class AuthService {
         if (token.getExpiresAt().isBefore(Instant.now())) {
             throw unauthorized();
         }
+        // доступ закрыли, пока человек был в приложении: сеанс недействителен
+        requireOpen(token.getUser());
         return token.getUser();
+    }
+
+    /**
+     * Закрытый доступ. Отвечаем тем же кодом, что и на просроченный вход: приложение само
+     * вернёт человека на экран входа, где он и прочитает, что доступ закрыт.
+     */
+    public static void requireOpen(AppUser user) {
+        if (user != null && user.isBlocked()) {
+            String reason = user.getBlockReason();
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED,
+                    reason == null || reason.isBlank()
+                            ? "Доступ к приложению закрыт"
+                            : "Доступ к приложению закрыт: " + reason);
+        }
     }
 
     @Transactional

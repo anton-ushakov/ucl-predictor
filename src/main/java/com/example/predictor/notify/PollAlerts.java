@@ -49,7 +49,7 @@ public class PollAlerts {
 
     public void newPoll(FriendGroup group, AppUser author, Long pollId, String question,
                         Instant createdAt) {
-        List<GroupMember> memberList = members.findAllWithUser(group.getId());
+        List<GroupMember> memberList = open(members.findAllWithUser(group.getId()));
         if (memberList.size() < 2) {
             return;
         }
@@ -102,5 +102,16 @@ public class PollAlerts {
             // не доставили — голосование всё равно видно в приложении
             log.warn("Не удалось отправить оповещение о голосовании: {}", e.getMessage());
         }
+    }
+
+    /** Без тех, кому закрыли доступ: оповещения им не нужны и не дойдут. */
+    private static List<GroupMember> open(List<GroupMember> memberList) {
+        List<GroupMember> list = new java.util.ArrayList<>(memberList.size());
+        for (GroupMember gm : memberList) {
+            if (!gm.getUser().isBlocked()) {
+                list.add(gm);
+            }
+        }
+        return list;
     }
 }

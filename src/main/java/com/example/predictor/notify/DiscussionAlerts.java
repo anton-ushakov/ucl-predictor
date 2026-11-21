@@ -53,7 +53,7 @@ public class DiscussionAlerts {
     /** Написано сообщение: будим остальных участников группы. */
     public void newMessage(FriendGroup group, LocalDate week, AppUser author, Long messageId,
                            String text, Instant writtenAt) {
-        List<GroupMember> memberList = members.findAllWithUser(group.getId());
+        List<GroupMember> memberList = open(members.findAllWithUser(group.getId()));
         if (memberList.size() < 2) {
             return;
         }
@@ -87,7 +87,7 @@ public class DiscussionAlerts {
     /** Написано сообщение в чате группы: будим остальных так же, как в обсуждении тура. */
     public void newChatMessage(FriendGroup group, AppUser author, Long messageId, String text,
                                Instant writtenAt) {
-        List<GroupMember> memberList = members.findAllWithUser(group.getId());
+        List<GroupMember> memberList = open(members.findAllWithUser(group.getId()));
         if (memberList.size() < 2) {
             return;
         }
@@ -148,5 +148,16 @@ public class DiscussionAlerts {
             // не доставили — сообщение всё равно записано и видно в приложении
             log.warn("Не удалось отправить оповещение об обсуждении: {}", e.getMessage());
         }
+    }
+
+    /** Без тех, кому закрыли доступ: оповещения им не нужны и не дойдут. */
+    private static List<GroupMember> open(List<GroupMember> memberList) {
+        List<GroupMember> list = new java.util.ArrayList<>(memberList.size());
+        for (GroupMember gm : memberList) {
+            if (!gm.getUser().isBlocked()) {
+                list.add(gm);
+            }
+        }
+        return list;
     }
 }

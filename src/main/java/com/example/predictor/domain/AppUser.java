@@ -36,6 +36,16 @@ public class AppUser {
     @Column(name = "must_change_password", nullable = false)
     private boolean mustChangePassword;
 
+    /** Доступ закрыт: человек не войдёт и оповещений не получит. */
+    @Column(name = "blocked_at")
+    private Instant blockedAt;
+
+    @Column(name = "blocked_by")
+    private Long blockedBy;
+
+    @Column(name = "block_reason", length = 200)
+    private String blockReason;
+
     @Column(name = "password_changed_at")
     private Instant passwordChangedAt;
 
@@ -166,4 +176,29 @@ public class AppUser {
     public Instant getPinSetAt() { return pinSetAt; }
     public boolean isMustSetPin() { return mustSetPin; }
     public Instant getPinBlockedUntil() { return pinBlockedUntil; }
+
+    public boolean isBlocked() {
+        return blockedAt != null;
+    }
+
+    public Instant getBlockedAt() {
+        return blockedAt;
+    }
+
+    public String getBlockReason() {
+        return blockReason;
+    }
+
+    /** Закрыть доступ. Причина нужна не приложению, а памяти: через полгода не вспомнить. */
+    public void block(Long adminId, String reason, Instant when) {
+        this.blockedAt = when;
+        this.blockedBy = adminId;
+        this.blockReason = reason;
+    }
+
+    public void unblock() {
+        this.blockedAt = null;
+        this.blockedBy = null;
+        this.blockReason = null;
+    }
 }

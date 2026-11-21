@@ -106,7 +106,7 @@ public class NotificationGenerator {
         }
         List<Notification> created = new ArrayList<>();
         for (FriendGroup group : allGroups) {
-            List<GroupMember> memberList = members.findAllWithUser(group.getId());
+            List<GroupMember> memberList = open(members.findAllWithUser(group.getId()));
             if (memberList.isEmpty()) {
                 continue;
             }
@@ -466,4 +466,15 @@ public class NotificationGenerator {
         }
     }
 
+
+    /** Без тех, кому закрыли доступ: оповещения им не нужны и не дойдут. */
+    private static List<GroupMember> open(List<GroupMember> memberList) {
+        List<GroupMember> list = new java.util.ArrayList<>(memberList.size());
+        for (GroupMember gm : memberList) {
+            if (!gm.getUser().isBlocked()) {
+                list.add(gm);
+            }
+        }
+        return list;
+    }
 }

@@ -16,4 +16,7 @@ public interface DeviceTokenRepository extends JpaRepository<DeviceToken, Long> 
     List<DeviceToken> findByUserIdIn(Collection<Long> userIds);
 
     void deleteByToken(String token);
+
+    /** Все телефоны участника: при закрытии доступа оповещениям уходить некуда. */
+    void deleteByUserId(Long userId);
 }

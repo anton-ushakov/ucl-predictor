@@ -66,7 +66,9 @@ public class GroupService {
                                  List<MemberDto> members, SettingsDto settings,
                                  List<OptionDto> availableTiebreakers, List<OptionDto> availableRevealModes,
                                  List<OptionDto> availableSubmissionModes,
-                                 List<OptionDto> availableMatchSelections, String settingsNote) {
+                                 List<OptionDto> availableMatchSelections, String settingsNote,
+                                 /** Сколько сообщений в чате группы участник ещё не читал. */
+                                 long chatUnread) {
     }
 
     private static final String SETTINGS_NOTE =
@@ -81,11 +83,14 @@ public class GroupService {
     private final AuthService auth;
     private final PasswordResetRepository passwordResets;
     private final com.example.predictor.round.LeaderService leaderService;
+    private final com.example.predictor.chat.ChatService chat;
 
     public GroupService(FriendGroupRepository groups, GroupMemberRepository members,
                         AppUserRepository users, GroupAccess access, AuthModeConfig authMode,
                         AuthService auth, PasswordResetRepository passwordResets,
-                        com.example.predictor.round.LeaderService leaderService) {
+                        com.example.predictor.round.LeaderService leaderService,
+                        com.example.predictor.chat.ChatService chat) {
+        this.chat = chat;
         this.leaderService = leaderService;
         this.authMode = authMode;
         this.auth = auth;
@@ -163,7 +168,7 @@ public class GroupService {
                 .map(m -> new OptionDto(m.name(), m.getDescription())).toList();
         return new GroupDetailDto(g.getId(), g.getName(), visibleInviteCode(g), ms.member().getRole(),
                 memberDtos, settings, tiebreakerOptions, revealOptions, submissionOptions,
-                selectionOptions, SETTINGS_NOTE);
+                selectionOptions, SETTINGS_NOTE, chat.unread(groupId, current.getId()));
     }
 
     /** Только владелец. Прогнозы это не затрагивает: их не может изменить никто. */

@@ -115,6 +115,21 @@ public final class NotificationTexts {
         return new Text(title, body.toString());
     }
 
+    /** Новое сообщение в чате группы. Заголовок — название группы: чат у неё один. */
+    public static Text chat(String groupName, String author, String text) {
+        StringBuilder body = new StringBuilder();
+        if (author != null && !author.isBlank()) {
+            body.append(author);
+        }
+        if (text != null && !text.isBlank()) {
+            if (body.length() > 0) {
+                body.append(": ");
+            }
+            body.append(shorten(text, 120));
+        }
+        return new Text("Чат · " + groupName, body.toString());
+    }
+
     private static String shorten(String text, int max) {
         String one = text.replace('\n', ' ').trim();
         return one.length() <= max ? one : one.substring(0, max - 1) + "…";

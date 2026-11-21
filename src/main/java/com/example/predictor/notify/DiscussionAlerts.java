@@ -57,11 +57,7 @@ public class DiscussionAlerts {
         if (memberList.size() < 2) {
             return;
         }
-        Map<Long, NotificationSettings> wants = new HashMap<>();
-        List<Long> ids = memberList.stream().map(gm -> gm.getUser().getId()).toList();
-        for (NotificationSettings s : settings.findByUserIdIn(ids)) {
-            wants.put(s.getUserId(), s);
-        }
+        Map<Long, NotificationSettings> wants = settingsOf(memberList);
 
         Text message = NotificationTexts.discussion(group.getName(), week,
                 author.getUsername(), text);
@@ -86,6 +82,46 @@ public class DiscussionAlerts {
         }
         notifications.saveAll(fresh);
         sendAfterCommit(fresh);
+    }
+
+    /** Написано сообщение в чате группы: будим остальных так же, как в обсуждении тура. */
+    public void newChatMessage(FriendGroup group, AppUser author, Long messageId, String text,
+                               Instant writtenAt) {
+        List<GroupMember> memberList = members.findAllWithUser(group.getId());
+        if (memberList.size() < 2) {
+            return;
+        }
+        Map<Long, NotificationSettings> wants = settingsOf(memberList);
+        Text message = NotificationTexts.chat(group.getName(), author.getUsername(), text);
+        String key = "chat:" + group.getId() + ":msg:" + messageId;
+
+        List<Notification> fresh = new ArrayList<>();
+        for (GroupMember gm : memberList) {
+            Long userId = gm.getUser().getId();
+            if (userId.equals(author.getId())) {
+                continue;
+            }
+            NotificationSettings prefs = wants.get(userId);
+            if (prefs != null && !prefs.wants(NotificationType.CHAT)) {
+                continue;
+            }
+            fresh.add(new Notification(userId, group.getId(), NotificationType.CHAT, key,
+                    message.title(), message.body(), null, writtenAt));
+        }
+        if (fresh.isEmpty()) {
+            return;
+        }
+        notifications.saveAll(fresh);
+        sendAfterCommit(fresh);
+    }
+
+    private Map<Long, NotificationSettings> settingsOf(List<GroupMember> memberList) {
+        Map<Long, NotificationSettings> wants = new HashMap<>();
+        List<Long> ids = memberList.stream().map(gm -> gm.getUser().getId()).toList();
+        for (NotificationSettings s : settings.findByUserIdIn(ids)) {
+            wants.put(s.getUserId(), s);
+        }
+        return wants;
     }
 
     /**

@@ -23,7 +23,7 @@ public class NotificationService {
     }
 
     public record SettingsDto(boolean lockSoon, boolean matchFinished, boolean summary,
-                              boolean discussion) {
+                              boolean discussion, boolean chat) {
     }
 
     public record OptionDto(String code, String description) {
@@ -73,10 +73,10 @@ public class NotificationService {
 
     @Transactional
     public SettingsDto updateSettings(AppUser user, boolean lockSoon, boolean matchFinished,
-                                      boolean summary, boolean discussion) {
+                                      boolean summary, boolean discussion, boolean chat) {
         NotificationSettings s = settings.findById(user.getId())
                 .orElseGet(() -> new NotificationSettings(user.getId()));
-        s.change(lockSoon, matchFinished, summary, discussion);
+        s.change(lockSoon, matchFinished, summary, discussion, chat);
         settings.save(s);
         return toDto(s);
     }
@@ -87,6 +87,7 @@ public class NotificationService {
     }
 
     private static SettingsDto toDto(NotificationSettings s) {
-        return new SettingsDto(s.isLockSoon(), s.isMatchFinished(), s.isSummary(), s.isDiscussion());
+        return new SettingsDto(s.isLockSoon(), s.isMatchFinished(), s.isSummary(),
+                s.isDiscussion(), s.isChat());
     }
 }

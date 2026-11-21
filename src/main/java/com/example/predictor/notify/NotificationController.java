@@ -22,7 +22,7 @@ public class NotificationController {
     public record UpdateSettingsRequest(@NotNull Boolean lockSoon,
                                         @NotNull Boolean matchFinished,
                                         @NotNull Boolean summary,
-                                        Boolean discussion) {
+                                        Boolean discussion, Boolean chat) {
     }
 
     private final AuthService auth;
@@ -62,9 +62,10 @@ public class NotificationController {
             @RequestHeader(value = "Authorization", required = false) String authorization,
             @Valid @RequestBody UpdateSettingsRequest request) {
         AppUser user = auth.authenticate(authorization);
-        // старое приложение это поле не присылает: считаем обсуждение включённым
+        // старое приложение этих полей не присылает: считаем их включёнными
         boolean discussion = request.discussion() == null || request.discussion();
+        boolean chat = request.chat() == null || request.chat();
         return notifications.updateSettings(user, request.lockSoon(), request.matchFinished(),
-                request.summary(), discussion);
+                request.summary(), discussion, chat);
     }
 }

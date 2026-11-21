@@ -11,7 +11,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.List;
 
 /** Оповещения участника: список, отметка о прочтении и настройки. */
@@ -29,21 +28,53 @@ public class NotificationService {
     public record OptionDto(String code, String description) {
     }
 
+    /**
+     * С какой сборки приложение умеет показывать этот вид оповещений. Старому приложению
+     * настройку не показываем: экрана под неё там нет, а переключатель без экрана сбивает
+     * с толку и, хуже того, в старых сборках переключал соседнюю настройку.
+     */
+    private static int sinceVersion(NotificationType type) {
+        return switch (type) {
+            case CHAT, POLL, TEAM_CATALOG -> 20;
+            default -> 0;
+        };
+    }
+
+    /** Какие настройки показывать этому приложению и этому человеку. */
+    private List<OptionDto> optionsFor(AppUser user, Integer clientVersion) {
+        int version = clientVersion == null ? 0 : clientVersion;
+        List<OptionDto> list = new java.util.ArrayList<>();
+        for (NotificationType type : NotificationType.values()) {
+            if (version < sinceVersion(type)) {
+                continue;
+            }
+            // заявки на справочник разбирает владелец приложения: остальным эта строка ни к чему
+            if (type == NotificationType.TEAM_CATALOG && !admins.isAdmin(user)) {
+                continue;
+            }
+            list.add(new OptionDto(type.name(), type.getDescription()));
+        }
+        return list;
+    }
+
     public record InboxDto(long unread, List<NotificationDto> notifications, SettingsDto settings,
                            List<OptionDto> types) {
     }
 
     private final NotificationRepository notifications;
     private final NotificationSettingsRepository settings;
+    private final com.example.predictor.common.AdminAccess admins;
 
     public NotificationService(NotificationRepository notifications,
-                               NotificationSettingsRepository settings) {
+                               NotificationSettingsRepository settings,
+                               com.example.predictor.common.AdminAccess admins) {
         this.notifications = notifications;
         this.settings = settings;
+        this.admins = admins;
     }
 
     @Transactional(readOnly = true)
-    public InboxDto inbox(AppUser user, boolean unreadOnly) {
+    public InboxDto inbox(AppUser user, boolean unreadOnly, Integer clientVersion) {
         List<Notification> list = unreadOnly
                 ? notifications.findByUserIdAndReadAtIsNullOrderByCreatedAtDesc(user.getId())
                 : notifications.findTop100ByUserIdOrderByCreatedAtDesc(user.getId());
@@ -52,9 +83,7 @@ public class NotificationService {
                         n.getBody(), n.getRoundWeek(), n.getCreatedAt(), n.getReadAt() != null))
                 .toList();
         return new InboxDto(notifications.countByUserIdAndReadAtIsNull(user.getId()), dtos,
-                toDto(settingsOf(user.getId())),
-                Arrays.stream(NotificationType.values())
-                        .map(t -> new OptionDto(t.name(), t.getDescription())).toList());
+                toDto(settingsOf(user.getId())), optionsFor(user, clientVersion));
     }
 
     @Transactional

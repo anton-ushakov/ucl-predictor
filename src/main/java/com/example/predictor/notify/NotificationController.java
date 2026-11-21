@@ -36,10 +36,12 @@ public class NotificationController {
 
     /** Оповещения участника, новые сверху, вместе с его настройками. */
     @GetMapping
-    public InboxDto inbox(@RequestHeader(value = "Authorization", required = false) String authorization,
-                          @RequestParam(value = "unreadOnly", defaultValue = "false") boolean unreadOnly) {
+    public InboxDto inbox(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestHeader(value = "X-App-Version", required = false) Integer clientVersion,
+            @RequestParam(value = "unreadOnly", defaultValue = "false") boolean unreadOnly) {
         AppUser user = auth.authenticate(authorization);
-        return notifications.inbox(user, unreadOnly);
+        return notifications.inbox(user, unreadOnly, clientVersion);
     }
 
     /** Отметить прочитанными: указанные или все, если список пуст. */

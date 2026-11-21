@@ -38,4 +38,44 @@ public final class FeedDtos {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record Goals(@JsonAlias("homeTeam") Integer home, @JsonAlias("awayTeam") Integer away) {
     }
+
+    // ------------------------------------------------------------- турнирная таблица
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record StandingsResponse(List<StandingsBlock> standings) {
+    }
+
+    /**
+     * type: TOTAL, HOME или AWAY — нам нужен только TOTAL. group: название группы,
+     * если турнир групповой.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record StandingsBlock(String stage, String type, String group, List<TableRow> table) {
+    }
+
+    /** form: строка вида «W,W,D,L,W» — последние матчи команды. */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record TableRow(Integer position, TableTeam team, Integer playedGames, Integer won,
+                           Integer draw, Integer lost, Integer points, Integer goalsFor,
+                           Integer goalsAgainst, String form) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record TableTeam(Long id, String name, String shortName, String crest) {
+    }
+
+    // ------------------------------------------------------------- личные встречи
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record HeadToHeadResponse(Aggregates aggregates) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Aggregates(Integer numberOfMatches, Integer totalGoals,
+                             SideStats homeTeam, SideStats awayTeam) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record SideStats(Long id, String name, Integer wins, Integer draws, Integer losses) {
+    }
 }

@@ -76,6 +76,8 @@ public class RoundService {
     private final JokerService jokerService;
     private final LeaderService leaderService;
     private final com.example.predictor.repository.GroupRoundRepository groupRounds;
+    private final com.example.predictor.repository.StandingRowRepository standingRows;
+    private final com.example.predictor.repository.HeadToHeadRepository headToHead;
 
     public RoundService(GroupAccess access, RulesService rulesService,
                         PredictionRepository predictions, RoundResultRepository results,
@@ -83,8 +85,12 @@ public class RoundService {
                         ScoreDecisionService decisionService, RoundMatches roundMatches,
                         JokerService jokerService, LeaderService leaderService,
                         TeamNamesService teamNames,
-                        com.example.predictor.repository.GroupRoundRepository groupRounds) {
+                        com.example.predictor.repository.GroupRoundRepository groupRounds,
+                        com.example.predictor.repository.StandingRowRepository standingRows,
+                        com.example.predictor.repository.HeadToHeadRepository headToHead) {
         this.groupRounds = groupRounds;
+        this.standingRows = standingRows;
+        this.headToHead = headToHead;
         this.teamNames = teamNames;
         this.roundMatches = roundMatches;
         this.jokerService = jokerService;
@@ -264,6 +270,14 @@ public class RoundService {
         Map<Long, ScoreDecisionService.Info> infos =
                 decisionService.resolve(groupId, rules, weekMatches, memberList, predictorIds);
         int decisionsForMe = 0;
+        // справки от источника: форма из турнирной таблицы и личные встречи
+        Map<String, String> forms = formsOf(weekMatches);
+        Map<Long, com.example.predictor.domain.MatchHeadToHead> h2h = new HashMap<>();
+        for (com.example.predictor.domain.MatchHeadToHead row
+                : headToHead.findByMatchIdIn(weekMatches.stream().map(FootballMatch::getId).toList())) {
+            h2h.put(row.getMatchId(), row);
+        }
+
         List<MatchView> views = new ArrayList<>();
         int open = 0;
         int liveMatches = 0;
@@ -332,7 +346,9 @@ public class RoundService {
                     StageLabels.of(m.getStage()), m.getMatchday(), m.getStatus(),
                     counted ? m.scoreHome(info.basis()) : null, counted ? m.scoreAway(info.basis()) : null,
                     m.getLiveHome(), m.getLiveAway(),
-                    detail, summaryOf(forMatch, mine, visible), info.kind().name(), decision, isOpen, locked, forMatch.size(), memberList.size(), myView, visible, others));
+                    detail, summaryOf(forMatch, mine, visible), info.kind().name(), decision, isOpen, locked, forMatch.size(), memberList.size(), myView, visible, others,
+                    forms.get(m.getHomeTeam()), forms.get(m.getAwayTeam()),
+                    headToHeadOf(h2h.get(m.getId()))));
         }
 
         // таблица тура: итоговая, если тур подведён, иначе предварительная по сыгранным матчам
@@ -593,6 +609,37 @@ public class RoundService {
             result.add(new RoundParticipants.Member(gm.getUser().getId(), gm.getJoinedAt()));
         }
         return result;
+    }
+
+    /** Форма команд из турнирных таблиц: название команды → «В В Н П В». */
+    private Map<String, String> formsOf(List<FootballMatch> weekMatches) {
+        Set<Long> competitionIds = new HashSet<>();
+        for (FootballMatch m : weekMatches) {
+            if (m.getCompetition() != null) {
+                competitionIds.add(m.getCompetition().getId());
+            }
+        }
+        Map<String, String> forms = new HashMap<>();
+        if (competitionIds.isEmpty()) {
+            return forms;
+        }
+        for (com.example.predictor.domain.StandingRowEntity row
+                : standingRows.findByCompetitionIdIn(new ArrayList<>(competitionIds))) {
+            String form = com.example.predictor.feed.StandingsService.form(row.getForm());
+            if (form != null) {
+                forms.put(row.getTeamName(), form);
+            }
+        }
+        return forms;
+    }
+
+    private static RoundDtos.HeadToHeadView headToHeadOf(
+            com.example.predictor.domain.MatchHeadToHead row) {
+        if (row == null || row.getTotal() <= 0) {
+            return null;
+        }
+        return new RoundDtos.HeadToHeadView(row.getTotal(), row.getHomeWins(), row.getDraws(),
+                row.getAwayWins());
     }
 
     /**

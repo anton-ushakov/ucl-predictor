@@ -75,4 +75,9 @@ public interface MatchRepository extends JpaRepository<FootballMatch, Long> {
                                          @Param("groupId") Long groupId,
                                          @Param("from") LocalDate from,
                                          @Param("to") LocalDate to);
+
+    /** Ближайшие несыгранные матчи: для них берём справки вроде личных встреч. */
+    List<FootballMatch> findByStatusAndKickoffAtBetweenOrderByKickoffAtAsc(
+            com.example.predictor.domain.MatchStatus status, java.time.Instant from,
+            java.time.Instant to);
 }

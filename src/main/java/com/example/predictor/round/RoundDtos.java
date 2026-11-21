@@ -67,7 +67,13 @@ public final class RoundDtos {
                             String counting, ScoreDecisionView scoreDecision,
                             boolean open, boolean locked,
                             int predictedCount, int memberCount, MyPrediction mine,
-                            boolean othersVisible, List<OtherPrediction> others) {
+                            boolean othersVisible, List<OtherPrediction> others,
+                            /** Справки от источника: форма команд и личные встречи. */
+                            String homeForm, String awayForm, HeadToHeadView headToHead) {
+    }
+
+    /** Личные встречи: сколько матчей и как они разошлись. */
+    public record HeadToHeadView(int total, int homeWins, int draws, int awayWins) {
     }
 
     /**

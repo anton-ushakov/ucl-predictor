@@ -71,4 +71,48 @@ public class FootballDataClient {
                 })
                 .body(FeedDtos.Response.class);
     }
+
+    /** Турнирная таблица: один запрос на турнир, заодно приносит форму команд. */
+    public FeedDtos.StandingsResponse fetchStandings(String code) {
+        return http.get()
+                .uri(uriBuilder -> uriBuilder.path("/competitions/{code}/standings").build(code))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    int status = response.getStatusCode().value();
+                    if (status == 403) {
+                        throw new ForbiddenException(code);
+                    }
+                    if (status == 429) {
+                        throw new RateLimitException();
+                    }
+                    throw new IllegalStateException(
+                            "football-data.org ответил " + status + " на таблицу турнира " + code);
+                })
+                .body(FeedDtos.StandingsResponse.class);
+    }
+
+    /**
+     * Личные встречи двух команд этого матча. На бесплатном тарифе может быть закрыто —
+     * тогда источник отвечает 403, и мы просто не показываем эту строку.
+     */
+    public FeedDtos.HeadToHeadResponse fetchHeadToHead(long externalMatchId, int limit) {
+        return http.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/matches/{id}/head2head")
+                        .queryParam("limit", limit)
+                        .build(externalMatchId))
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, (request, response) -> {
+                    int status = response.getStatusCode().value();
+                    if (status == 403) {
+                        throw new ForbiddenException("head2head");
+                    }
+                    if (status == 429) {
+                        throw new RateLimitException();
+                    }
+                    throw new IllegalStateException(
+                            "football-data.org ответил " + status + " на личные встречи");
+                })
+                .body(FeedDtos.HeadToHeadResponse.class);
+    }
 }

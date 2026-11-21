@@ -19,6 +19,7 @@ public class ScheduledTasks {
 
     private final FootballDataClient client;
     private final MatchSyncService sync;
+    private final ExtraDataSyncService extra;
     private final RoundFinalizer finalizer;
     private final NotificationGenerator notifications;
     private boolean warnedAboutToken;
@@ -29,7 +30,9 @@ public class ScheduledTasks {
     public ScheduledTasks(FootballDataClient client, MatchSyncService sync, RoundFinalizer finalizer,
                           NotificationGenerator notifications,
                           com.example.predictor.round.AutoSelectionService autoSelection,
-                          ApiFootballSyncService apiFootball) {
+                          ApiFootballSyncService apiFootball,
+                          ExtraDataSyncService extra) {
+        this.extra = extra;
         this.apiFootball = apiFootball;
         this.autoSelection = autoSelection;
         this.notifications = notifications;
@@ -100,6 +103,23 @@ public class ScheduledTasks {
             notifications.generate();
         } catch (RuntimeException e) {
             log.error("Ошибка при подготовке оповещений", e);
+        }
+    }
+
+    /**
+     * Турнирные таблицы и личные встречи. Раз в час: таблица меняется после матчей, а не
+     * каждую минуту, и лимит запросов тратить на неё чаще незачем.
+     */
+    @Scheduled(initialDelayString = "PT2M", fixedDelayString = "${app.football-data.extra-interval:PT1H}")
+    public void extras() {
+        try {
+            int tables = extra.syncStandings();
+            int pairs = extra.syncHeadToHead();
+            if (tables > 0 || pairs > 0) {
+                log.info("Справки обновлены: таблиц {}, личных встреч {}", tables, pairs);
+            }
+        } catch (RuntimeException e) {
+            log.warn("Не удалось обновить справки: {}", e.getMessage());
         }
     }
 }

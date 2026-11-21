@@ -25,4 +25,9 @@ public interface GroupMemberRepository extends JpaRepository<GroupMember, GroupM
 
     @Query("select count(m) from GroupMember m where m.id.groupId = :groupId")
     long countInGroup(@Param("groupId") Long groupId);
+
+    /** Владеет ли человек хоть одной группой: справочник команд меняют только владельцы. */
+    @Query("select count(m) > 0 from GroupMember m "
+            + "where m.id.userId = :userId and m.role = com.example.predictor.domain.GroupRole.OWNER")
+    boolean ownsAnyGroup(@Param("userId") Long userId);
 }

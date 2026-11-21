@@ -9,7 +9,8 @@ import static org.junit.jupiter.api.Assertions.*;
 class TeamCatalogTest {
 
     private final TeamCatalogService catalog =
-            new TeamCatalogService(null, "https://flagcdn.com/w160/{code}.png");
+            new TeamCatalogService(null, null, null, null, null, null,
+                    "https://flagcdn.com/w160/{code}.png");
 
     @Test
     void ownCrestWins() {

@@ -1,7 +1,13 @@
 package com.example.predictor.names;
 
+import com.example.predictor.common.AdminAccess;
 import com.example.predictor.domain.AppUser;
 import com.example.predictor.domain.Team;
+import com.example.predictor.domain.TeamChangeRequest;
+import com.example.predictor.notify.CatalogAlerts;
+import com.example.predictor.repository.AppUserRepository;
+import com.example.predictor.repository.GroupMemberRepository;
+import com.example.predictor.repository.TeamChangeRequestRepository;
 import com.example.predictor.repository.TeamRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -10,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,21 +42,39 @@ public class TeamCatalogService {
                           String countryCode) {
     }
 
-    public record CatalogView(List<TeamDto> teams, int clubs, int nationals, String note) {
+    /**
+     * amAdmin — смотрит владелец приложения: только он разбирает заявки.
+     * canEdit — может ли смотрящий вообще менять справочник.
+     * pending — сколько заявок ждёт разбора.
+     */
+    public record CatalogView(List<TeamDto> teams, int clubs, int nationals, String note,
+                              boolean amAdmin, boolean canEdit, long pending) {
     }
 
     private final TeamRepository teams;
+    private final TeamChangeRequestRepository requests;
+    private final GroupMemberRepository members;
+    private final AppUserRepository users;
+    private final AdminAccess admins;
+    private final CatalogAlerts alerts;
     private final String flagTemplate;
 
-    public TeamCatalogService(TeamRepository teams,
+    public TeamCatalogService(TeamRepository teams, TeamChangeRequestRepository requests,
+                              GroupMemberRepository members, AppUserRepository users,
+                              AdminAccess admins, CatalogAlerts alerts,
                               @Value("${app.flags.url-template:https://flagcdn.com/w160/{code}.png}")
                               String flagTemplate) {
         this.teams = teams;
+        this.requests = requests;
+        this.members = members;
+        this.users = users;
+        this.admins = admins;
+        this.alerts = alerts;
         this.flagTemplate = flagTemplate;
     }
 
     @Transactional(readOnly = true)
-    public CatalogView list(String kindName, String query) {
+    public CatalogView list(AppUser user, String kindName, String query) {
         Team.Kind kind = kind(kindName);
         List<Team> found = query == null || query.isBlank()
                 ? teams.findByKindOrderByNameAsc(kind, PageRequest.of(0, LIMIT))
@@ -62,8 +87,17 @@ public class TeamCatalogService {
                 ? "Сборные уже заведены со флагами. Можно добавить свою команду или поправить флаг."
                 : "Клубы собраны из загруженных матчей. Если клуба нет, добавьте его — эмблему "
                         + "можно указать ссылкой на картинку.";
+        boolean amAdmin = admins.isAdmin(user);
+        boolean canEdit = amAdmin || members.ownsAnyGroup(user.getId());
+        if (!canEdit) {
+            note = "Справочник общий для всех групп, поэтому меняют его владельцы групп.";
+        } else if (!amAdmin) {
+            note += " Переименование существующей команды увидят все группы, поэтому оно "
+                    + "сначала уходит на одобрение.";
+        }
         return new CatalogView(dtos, (int) teams.countByKind(Team.Kind.CLUB),
-                (int) teams.countByKind(Team.Kind.NATIONAL), note);
+                (int) teams.countByKind(Team.Kind.NATIONAL), note, amAdmin, canEdit,
+                amAdmin ? requests.countByStatus(TeamChangeRequest.Status.PENDING) : 0);
     }
 
     @Transactional(readOnly = true)
@@ -91,6 +125,7 @@ public class TeamCatalogService {
 
     @Transactional
     public TeamDto add(AppUser user, String kindName, String name, String crest, String countryCode) {
+        requireEditor(user);
         Team.Kind kind = kind(kindName);
         String clean = clean(name, 100, "Укажите название команды");
         teams.findByKindAndNameIgnoreCase(kind, clean).ifPresent(t -> {
@@ -99,11 +134,21 @@ public class TeamCatalogService {
         });
         Team team = new Team(kind, clean, checkUrl(crest), checkCode(countryCode), user.getId());
         teams.save(team);
+        // новая команда никому не мешает, поэтому появляется сразу — но владелец приложения
+        // должен знать, что в общем справочнике прибыло
+        if (!admins.isAdmin(user)) {
+            alerts.teamAdded(user, clean);
+        }
         return toDto(team);
     }
 
+    /**
+     * Правка существующей команды. У владельца приложения применяется сразу, у владельца
+     * группы становится заявкой: справочник один на все группы, и переименование видно всем.
+     */
     @Transactional
     public TeamDto edit(AppUser user, Long id, String name, String crest, String countryCode) {
+        requireEditor(user);
         Team team = require(id);
         String clean = clean(name, 100, "Укажите название команды");
         teams.findByKindAndNameIgnoreCase(team.getKind(), clean).ifPresent(other -> {
@@ -112,14 +157,104 @@ public class TeamCatalogService {
                         "Команда с таким названием уже есть");
             }
         });
-        team.change(clean, checkUrl(crest), checkCode(countryCode));
+        String url = checkUrl(crest);
+        String code = checkCode(countryCode);
+        if (!admins.isAdmin(user)) {
+            requests.save(new TeamChangeRequest(team.getId(), user.getId(),
+                    TeamChangeRequest.Kind.EDIT, clean, url, code, Instant.now()));
+            alerts.teamChangeAsked(user, team.getName(), clean, false);
+            // в справочнике пока всё по-старому: ждём одобрения
+            return toDto(team);
+        }
+        team.change(clean, url, code);
         teams.save(team);
         return toDto(team);
     }
 
     @Transactional
     public void remove(AppUser user, Long id) {
-        teams.delete(require(id));
+        requireEditor(user);
+        Team team = require(id);
+        if (!admins.isAdmin(user)) {
+            requests.save(new TeamChangeRequest(team.getId(), user.getId(),
+                    TeamChangeRequest.Kind.DELETE, team.getName(), null, null, Instant.now()));
+            alerts.teamChangeAsked(user, team.getName(), null, true);
+            return;
+        }
+        teams.delete(team);
+    }
+
+    // ------------------------------------------------------------------ заявки
+
+    /** Заявка глазами владельца приложения: что было, что просят и кто просит. */
+    public record RequestDto(Long id, Long teamId, String kind, String author, String wasName,
+                             String nowName, String crest, String countryCode, Instant createdAt) {
+    }
+
+    @Transactional(readOnly = true)
+    public List<RequestDto> pending(AppUser user) {
+        admins.require(user);
+        List<RequestDto> list = new ArrayList<>();
+        for (TeamChangeRequest r : requests.findByStatusOrderByIdAsc(TeamChangeRequest.Status.PENDING)) {
+            Team team = teams.findById(r.getTeamId()).orElse(null);
+            String author = users.findById(r.getAuthorId())
+                    .map(AppUser::getUsername).orElse("кто-то");
+            list.add(new RequestDto(r.getId(), r.getTeamId(), r.getKind().name(), author,
+                    team == null ? "команда удалена" : team.getName(), r.getName(), r.getCrest(),
+                    r.getCountryCode(), r.getCreatedAt()));
+        }
+        return list;
+    }
+
+    @Transactional
+    public String approve(AppUser user, Long requestId) {
+        admins.require(user);
+        TeamChangeRequest request = pendingRequest(requestId);
+        Team team = teams.findById(request.getTeamId()).orElse(null);
+        if (team == null) {
+            request.decide(TeamChangeRequest.Status.REJECTED, user.getId(), Instant.now());
+            return "Команды уже нет в справочнике, заявка закрыта";
+        }
+        String message;
+        if (request.getKind() == TeamChangeRequest.Kind.DELETE) {
+            teams.delete(team);
+            message = "Команда убрана из справочника";
+        } else {
+            team.change(request.getName(), request.getCrest(), request.getCountryCode());
+            teams.save(team);
+            message = "Новое название сохранено";
+        }
+        request.decide(TeamChangeRequest.Status.APPROVED, user.getId(), Instant.now());
+        return message;
+    }
+
+    @Transactional
+    public String reject(AppUser user, Long requestId) {
+        admins.require(user);
+        pendingRequest(requestId).decide(TeamChangeRequest.Status.REJECTED, user.getId(),
+                Instant.now());
+        return "Заявка отклонена, в справочнике всё осталось как было";
+    }
+
+    private TeamChangeRequest pendingRequest(Long id) {
+        TeamChangeRequest request = requests.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Заявка не найдена"));
+        if (request.getStatus() != TeamChangeRequest.Status.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Эта заявка уже разобрана");
+        }
+        return request;
+    }
+
+    /** Справочник один на все группы, поэтому менять его может только владелец группы. */
+    private void requireEditor(AppUser user) {
+        if (admins.isAdmin(user)) {
+            return;
+        }
+        if (!members.ownsAnyGroup(user.getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Справочник команд общий для всех групп: менять его может владелец группы");
+        }
     }
 
     private static Team.Kind kind(String name) {

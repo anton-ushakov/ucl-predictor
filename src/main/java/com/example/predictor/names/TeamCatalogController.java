@@ -32,8 +32,8 @@ public class TeamCatalogController {
     public CatalogView list(@RequestHeader(value = "Authorization", required = false) String authorization,
                             @RequestParam(value = "kind", defaultValue = "CLUB") String kind,
                             @RequestParam(value = "query", required = false) String query) {
-        auth.authenticate(authorization);
-        return catalog.list(kind, query);
+        AppUser me = auth.authenticate(authorization);
+        return catalog.list(me, kind, query);
     }
 
     @PostMapping
@@ -57,5 +57,32 @@ public class TeamCatalogController {
                        @PathVariable("teamId") Long teamId) {
         AppUser user = auth.authenticate(authorization);
         catalog.remove(user, teamId);
+    }
+
+    /** Заявки на справочник: видит и разбирает только владелец приложения. */
+    @GetMapping("/api/teams/requests")
+    public java.util.List<TeamCatalogService.RequestDto> requests(
+            @RequestHeader(value = "Authorization", required = false) String authorization) {
+        AppUser user = auth.authenticate(authorization);
+        return catalog.pending(user);
+    }
+
+    @PostMapping("/api/teams/requests/{id}/approve")
+    public MessageDto approve(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("id") Long id) {
+        AppUser user = auth.authenticate(authorization);
+        return new MessageDto(catalog.approve(user, id));
+    }
+
+    @PostMapping("/api/teams/requests/{id}/reject")
+    public MessageDto reject(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("id") Long id) {
+        AppUser user = auth.authenticate(authorization);
+        return new MessageDto(catalog.reject(user, id));
+    }
+
+    public record MessageDto(String message) {
     }
 }

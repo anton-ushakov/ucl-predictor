@@ -44,12 +44,15 @@ public class StandingsService {
     private final CompetitionRepository competitions;
     private final StandingRowRepository standings;
     private final TeamFormService teamForm;
+    private final com.example.predictor.names.TeamNamesService teamNames;
     private final ExtraDataSyncService extra;
     private final com.example.predictor.common.AdminAccess admins;
 
     public StandingsService(CompetitionRepository competitions, StandingRowRepository standings,
                             TeamFormService teamForm, ExtraDataSyncService extra,
-                            com.example.predictor.common.AdminAccess admins) {
+                            com.example.predictor.common.AdminAccess admins,
+                            com.example.predictor.names.TeamNamesService teamNames) {
+        this.teamNames = teamNames;
         this.competitions = competitions;
         this.standings = standings;
         this.teamForm = teamForm;
@@ -120,6 +123,9 @@ public class StandingsService {
     }
 
     private TableDto table(Competition competition) {
+        // словарь русских названий общий на всё приложение: в таблице он уместен так же,
+        // как в матчах, иначе рядом с «Арсеналом» стоял бы «Arsenal FC»
+        com.example.predictor.names.TeamNameMap labels = teamNames.map(true);
         List<StandingRowEntity> rows =
                 standings.findByCompetitionIdOrderByGroupLabelAscPositionAsc(competition.getId());
 
@@ -141,7 +147,8 @@ public class StandingsService {
                 rowForm = computed.get(row.getTeamName());
             }
             byGroup.computeIfAbsent(group, k -> new ArrayList<>())
-                    .add(new RowDto(row.getPosition(), row.getTeamName(), row.getCrest(),
+                    .add(new RowDto(row.getPosition(), labels.display(row.getTeamName()),
+                            row.getCrest(),
                             row.getPlayed(), row.getWon(), row.getDraw(), row.getLost(),
                             row.getGoalsFor(), row.getGoalsAgainst(), row.getPoints(), rowForm));
             if (updated == null || row.getUpdatedAt().isAfter(updated)) {

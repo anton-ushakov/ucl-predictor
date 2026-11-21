@@ -43,7 +43,7 @@ public final class SelectionDtos {
      * сначала выбирают тур, а потом отмечают матчи.
      */
     public record RoundOption(LocalDate key, int no, String title, int matches,
-                              Instant firstKickoff, Instant lastKickoff) {
+                              Instant firstKickoff, Instant lastKickoff, boolean friendly) {
     }
 
     /** Экран отбора матчей: турниры, матчи выбранного турнира и что с ними можно делать. */
@@ -53,7 +53,7 @@ public final class SelectionDtos {
                                 List<CompetitionDto> competitions, List<SelectableMatch> matches,
                                 String note,
                                 LocalDate roundKey, int roundNo, String roundTitle,
-                                List<RoundOption> rounds) {
+                                boolean roundFriendly, List<RoundOption> rounds) {
     }
 
     /** Автосостав турнира: его матчи попадают в тур сами. */
@@ -65,16 +65,22 @@ public final class SelectionDtos {
                                 LocalDate roundKey) {
     }
 
-    /** Новый тур в неделе: название необязательное. */
+    /** Новый тур в неделе: название необязательное, по умолчанию играют на шаурму. */
     public record NewRoundRequest(@NotNull(message = "Укажите неделю") LocalDate week,
-                                  @Size(max = 60) String title) {
+                                  @Size(max = 60) String title,
+                                  Boolean friendly) {
+    }
+
+    /** Товарищеский тур: победитель есть, шаурмы нет. */
+    public record FriendlyRequest(@NotNull Boolean friendly) {
     }
 
     public record RenameRoundRequest(@Size(max = 60) String title) {
     }
 
     /** Созданный или переименованный тур. */
-    public record RoundInfo(LocalDate key, int no, String title, String message) {
+    public record RoundInfo(LocalDate key, int no, String title, boolean friendly,
+                            String message) {
     }
 
     /** Ручной матч: владелец вводит команды и время начала сам. */

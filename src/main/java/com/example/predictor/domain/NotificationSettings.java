@@ -59,7 +59,7 @@ public class NotificationSettings {
             // без выбранных матчей тура не будет: владельцу напоминаем всегда
             case ROUND_SETUP -> true;
             // заявку на справочник некому разобрать, кроме владельца приложения
-            case TEAM_CATALOG -> true;
+            case TEAM_CATALOG, ACCOUNT_REQUEST -> true;
         };
     }
 

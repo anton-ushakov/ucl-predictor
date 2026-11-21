@@ -45,4 +45,20 @@ public class AppUsersController {
         AppUser me = auth.authenticate(authorization);
         return users.unblock(me, userId);
     }
+
+    @PostMapping("/{userId}/approve")
+    public AppUsersService.UserDto approve(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("userId") Long userId) {
+        AppUser me = auth.authenticate(authorization);
+        return users.approve(me, userId);
+    }
+
+    @DeleteMapping("/{userId}")
+    public void reject(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("userId") Long userId) {
+        AppUser me = auth.authenticate(authorization);
+        users.reject(me, userId);
+    }
 }

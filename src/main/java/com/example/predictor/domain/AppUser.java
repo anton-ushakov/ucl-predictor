@@ -36,6 +36,10 @@ public class AppUser {
     @Column(name = "must_change_password", nullable = false)
     private boolean mustChangePassword;
 
+    /** Когда владелец приложения одобрил эту учётную запись. Пусто — заявка ещё ждёт. */
+    @Column(name = "approved_at")
+    private Instant approvedAt;
+
     /** Доступ закрыт: человек не войдёт и оповещений не получит. */
     @Column(name = "blocked_at")
     private Instant blockedAt;
@@ -176,6 +180,18 @@ public class AppUser {
     public Instant getPinSetAt() { return pinSetAt; }
     public boolean isMustSetPin() { return mustSetPin; }
     public Instant getPinBlockedUntil() { return pinBlockedUntil; }
+
+    public boolean isApproved() {
+        return approvedAt != null;
+    }
+
+    public Instant getApprovedAt() {
+        return approvedAt;
+    }
+
+    public void approve(Instant when) {
+        this.approvedAt = when;
+    }
 
     public boolean isBlocked() {
         return blockedAt != null;

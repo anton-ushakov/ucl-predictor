@@ -35,7 +35,7 @@ public class NotificationService {
      */
     private static int sinceVersion(NotificationType type) {
         return switch (type) {
-            case CHAT, POLL, TEAM_CATALOG -> 20;
+            case CHAT, POLL, TEAM_CATALOG, ACCOUNT_REQUEST -> 20;
             default -> 0;
         };
     }
@@ -49,7 +49,8 @@ public class NotificationService {
                 continue;
             }
             // заявки на справочник разбирает владелец приложения: остальным эта строка ни к чему
-            if (type == NotificationType.TEAM_CATALOG && !admins.isAdmin(user)) {
+            if ((type == NotificationType.TEAM_CATALOG
+                    || type == NotificationType.ACCOUNT_REQUEST) && !admins.isAdmin(user)) {
                 continue;
             }
             list.add(new OptionDto(type.name(), type.getDescription()));

@@ -35,9 +35,14 @@ public class AuthService {
     private final AuthTokenRepository tokens;
     private final PasswordEncoder encoder;
     private final AuthModeConfig authMode;
+    private final com.example.predictor.common.AdminAccess admins;
+    private final com.example.predictor.notify.SignupAlerts signupAlerts;
 
     public AuthService(AppUserRepository users, AuthTokenRepository tokens, PasswordEncoder encoder,
-                       AuthModeConfig authMode) {
+                       AuthModeConfig authMode, com.example.predictor.common.AdminAccess admins,
+                       com.example.predictor.notify.SignupAlerts signupAlerts) {
+        this.admins = admins;
+        this.signupAlerts = signupAlerts;
         this.users = users;
         this.tokens = tokens;
         this.encoder = encoder;
@@ -60,8 +65,16 @@ public class AuthService {
         return username == null ? "" : username.trim();
     }
 
+    /**
+     * Что вышло из регистрации: либо вход, либо заявка, которую ещё должен одобрить владелец
+     * приложения. Заявку нельзя сообщить исключением: учётную запись мы уже создали, а
+     * исключение откатило бы её вместе с ответом.
+     */
+    public record SignupResult(AuthResponse token, String pending) {
+    }
+
     @Transactional
-    public AuthResponse registerSimple(String username, String pin) {
+    public SignupResult registerSimple(String username, String pin) {
         String name = normalizeUsername(username);
         checkPin(pin);
         if (users.existsByUsernameIgnoreCase(name)) {
@@ -71,7 +84,7 @@ public class AuthService {
             AppUser user = users.save(new AppUser(name, encoder.encode(unusablePassword())));
             user.setPin(encoder.encode(Pins.normalize(pin)), Instant.now());
             users.save(user);
-            return issueToken(user, null);
+            return finishSignup(user, null);
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Это имя уже занято");
         }
@@ -90,6 +103,7 @@ public class AuthService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Нет участника с таким именем"));
         requireOpen(user);
+        requireApproved(user);
         Instant now = Instant.now();
 
         if (!user.hasPin()) {
@@ -149,7 +163,7 @@ public class AuthService {
     // ------------------------------------------------------------------ парольный режим
 
     @Transactional
-    public AuthResponse register(String username, String password) {
+    public SignupResult register(String username, String password) {
         authMode.requirePasswords();
         String name = normalizeUsername(username);
         // BCrypt учитывает только первые 72 байта пароля
@@ -169,7 +183,7 @@ public class AuthService {
         String recoveryCode = RecoveryCodes.generate();
         user.setRecovery(encoder.encode(RecoveryCodes.normalize(recoveryCode)), Instant.now());
         users.save(user);
-        return issueToken(user, recoveryCode);
+        return finishSignup(user, recoveryCode);
     }
 
     /**
@@ -214,6 +228,7 @@ public class AuthService {
             throw badCredentials();
         }
         requireOpen(user);
+        requireApproved(user);
         return issueToken(user, null);
     }
 
@@ -319,7 +334,50 @@ public class AuthService {
         }
         // доступ закрыли, пока человек был в приложении: сеанс недействителен
         requireOpen(token.getUser());
+        requireApproved(token.getUser());
         return token.getUser();
+    }
+
+    /**
+     * Впускаем сразу или заводим заявку.
+     *
+     * Заявка нужна, когда у приложения есть хозяин: кто попало заводить себе учётную запись
+     * не должен. Если хозяина в базе нет (список ADMIN_USERNAMES пуст или те имена ещё не
+     * зарегистрированы), одобрять заявку некому — тогда впускаем сразу, иначе первый же
+     * человек не смог бы войти.
+     */
+    private SignupResult finishSignup(AppUser user, String recoveryCode) {
+        if (!approvalNeeded(user)) {
+            user.approve(Instant.now());
+            users.save(user);
+            return new SignupResult(issueToken(user, recoveryCode), null);
+        }
+        users.flush();
+        signupAlerts.newSignup(user);
+        return new SignupResult(null,
+                "Заявка отправлена владельцу приложения. Когда он её одобрит, войдите под "
+                        + "своим именем — пароль уже сохранён.");
+    }
+
+    /** Есть ли кому одобрять и нужно ли одобрение этому человеку. */
+    private boolean approvalNeeded(AppUser user) {
+        if (admins.isAdmin(user)) {
+            return false; // владелец приложения сам себя не одобряет
+        }
+        for (String name : admins.names()) {
+            if (users.existsByUsernameIgnoreCase(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Одобрена ли учётная запись: до одобрения вход закрыт. */
+    public static void requireApproved(AppUser user) {
+        if (user != null && !user.isApproved()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Заявка на регистрацию ещё не одобрена владельцем приложения");
+        }
     }
 
     /**

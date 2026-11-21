@@ -45,6 +45,7 @@ public class MatchSelectionService {
     private final MatchRepository matches;
     private final RoundMatchRepository selection;
     private final com.example.predictor.repository.GroupRoundRepository rounds;
+    private final com.example.predictor.repository.RoundResultRepository finishedRounds;
     private final PredictionRepository predictions;
     private final AppTime time;
     private final TeamNamesService teamNames;
@@ -59,7 +60,8 @@ public class MatchSelectionService {
                                  com.example.predictor.repository.GroupAutoCompetitionRepository autos,
                                  AutoSelectionService autoSelection,
                                  com.example.predictor.names.TeamCatalogService catalog,
-                                com.example.predictor.repository.GroupRoundRepository rounds) {
+                                com.example.predictor.repository.GroupRoundRepository rounds,
+                                com.example.predictor.repository.RoundResultRepository finishedRounds) {
         this.catalog = catalog;
         this.autos = autos;
         this.autoSelection = autoSelection;
@@ -70,6 +72,7 @@ public class MatchSelectionService {
         this.matches = matches;
         this.selection = selection;
         this.rounds = rounds;
+        this.finishedRounds = finishedRounds;
         this.predictions = predictions;
         this.time = time;
     }
@@ -171,7 +174,7 @@ public class MatchSelectionService {
                 auto.contains(chosen.getId()), selected.size(),
                 all.stream().map(c -> toDto(c, auto)).toList(), views, note,
                 key, RoundKeys.noOf(key), round == null ? null : round.getTitle(),
-                roundsOfWeek(groupId, week));
+                round != null && round.isFriendly(), roundsOfWeek(groupId, week));
     }
 
     // ------------------------------------------------------------------ состав тура
@@ -261,7 +264,7 @@ public class MatchSelectionService {
      */
     @Transactional
     public SelectionDtos.RoundInfo createRound(AppUser user, Long groupId, LocalDate week,
-                                               String title) {
+                                               String title, boolean friendly) {
         Membership ms = access.require(user, groupId);
         requireSelector(ms);
         requireMonday(week);
@@ -281,10 +284,12 @@ public class MatchSelectionService {
                     "В одной неделе больше " + RoundKeys.MAX_PER_WEEK + " туров не бывает");
         }
         String clean = clean(title);
-        rounds.save(new com.example.predictor.domain.GroupRound(groupId, key, clean, Instant.now(),
-                user.getId()));
-        return new SelectionDtos.RoundInfo(key, RoundKeys.noOf(key), clean,
-                "Тур создан. Отметьте матчи, которые в него войдут.");
+        rounds.save(new com.example.predictor.domain.GroupRound(groupId, key, clean, friendly,
+                Instant.now(), user.getId()));
+        return new SelectionDtos.RoundInfo(key, RoundKeys.noOf(key), clean, friendly,
+                friendly
+                        ? "Товарищеский тур создан: победитель будет, а шаурмы никто не должен."
+                        : "Тур создан. Отметьте матчи, которые в него войдут.");
     }
 
     /** Переименовать тур: пустое название — снова по датам матчей. */
@@ -299,7 +304,31 @@ public class MatchSelectionService {
         String clean = clean(title);
         round.rename(clean);
         return new SelectionDtos.RoundInfo(roundKey, RoundKeys.noOf(roundKey), clean,
-                clean == null ? "Название убрано" : "Название сохранено");
+                round.isFriendly(), clean == null ? "Название убрано" : "Название сохранено");
+    }
+
+    /**
+     * Переключить тур между игрой на шаурму и товарищеским. Пока итоги не подведены:
+     * после них долги уже записаны, и менять правила задним числом нечестно.
+     */
+    @Transactional
+    public SelectionDtos.RoundInfo setFriendly(AppUser user, Long groupId, LocalDate roundKey,
+                                               boolean friendly) {
+        Membership ms = access.require(user, groupId);
+        requireSelector(ms);
+        com.example.predictor.domain.GroupRound round = rounds
+                .findByGroupIdAndRoundKey(groupId, roundKey)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Тур не найден"));
+        if (finishedRounds.existsByGroupIdAndRoundWeek(groupId, roundKey)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Итоги тура уже подведены, менять правила задним числом поздно");
+        }
+        round.setFriendly(friendly);
+        return new SelectionDtos.RoundInfo(roundKey, RoundKeys.noOf(roundKey), round.getTitle(),
+                friendly,
+                friendly
+                        ? "Товарищеский тур: победителя посчитаем, шаурму — нет"
+                        : "Играем на шаурму: проигравший кормит победителя");
     }
 
     /** Туры недели с их матчами: из чего выбирать, когда кладёшь матчи в тур. */
@@ -332,8 +361,10 @@ public class MatchSelectionService {
             String title = rounds.findByGroupIdAndRoundKey(groupId, key)
                     .map(com.example.predictor.domain.GroupRound::getTitle)
                     .orElse(null);
+            boolean friendly = rounds.findByGroupIdAndRoundKey(groupId, key)
+                    .map(com.example.predictor.domain.GroupRound::isFriendly).orElse(false);
             options.add(new SelectionDtos.RoundOption(key, RoundKeys.noOf(key), title, ids.size(),
-                    firstKickoff, lastKickoff));
+                    firstKickoff, lastKickoff, friendly));
         }
         return options;
     }
@@ -341,7 +372,8 @@ public class MatchSelectionService {
     /** Тур мог появиться раньше этой таблицы: тогда заводим запись о нём сейчас. */
     private void ensureRound(Long groupId, LocalDate key, Long userId, Instant now) {
         if (!rounds.existsByGroupIdAndRoundKey(groupId, key)) {
-            rounds.save(new com.example.predictor.domain.GroupRound(groupId, key, null, now, userId));
+            rounds.save(new com.example.predictor.domain.GroupRound(groupId, key, null, false, now,
+                    userId));
         }
     }
 

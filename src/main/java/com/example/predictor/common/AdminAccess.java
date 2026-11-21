@@ -33,6 +33,11 @@ public class AdminAccess {
         }
     }
 
+    /** Имена владельцев приложения из настроек сервера. */
+    public Set<String> names() {
+        return java.util.Collections.unmodifiableSet(admins);
+    }
+
     public boolean isAdmin(AppUser user) {
         return user != null && user.getUsername() != null
                 && admins.contains(user.getUsername().trim().toLowerCase(Locale.ROOT));

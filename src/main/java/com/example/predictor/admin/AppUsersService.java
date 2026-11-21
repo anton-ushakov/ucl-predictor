@@ -25,13 +25,16 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class AppUsersService {
 
-    /** blocked — доступ закрыт; owner — владеет хотя бы одной группой. */
+    /**
+     * blocked — доступ закрыт; waiting — заявка на регистрацию ещё не одобрена;
+     * owner — владеет хотя бы одной группой.
+     */
     public record UserDto(Long id, String username, String badge, boolean admin, boolean blocked,
                           String reason, Instant blockedAt, Instant createdAt, boolean owner,
-                          boolean me) {
+                          boolean me, boolean waiting) {
     }
 
-    public record UsersView(List<UserDto> users, int blocked, String note) {
+    public record UsersView(List<UserDto> users, int blocked, int waiting, String note) {
     }
 
     private final AdminAccess admins;
@@ -55,19 +58,24 @@ public class AppUsersService {
         String needle = query == null ? "" : query.trim().toLowerCase();
         List<UserDto> list = new ArrayList<>();
         int blocked = 0;
+        int waiting = 0;
         for (AppUser user : users.findAll()) {
             if (user.isBlocked()) {
                 blocked++;
+            }
+            if (!user.isApproved()) {
+                waiting++;
             }
             if (!needle.isEmpty() && !user.getUsername().toLowerCase().contains(needle)) {
                 continue;
             }
             list.add(toDto(user, me));
         }
-        // закрытые сверху: с ними и разбираются, остальные по именам
-        list.sort(Comparator.comparing(UserDto::blocked).reversed()
+        // заявки сверху, за ними закрытые, остальные по именам: разбираются именно с первыми
+        list.sort(Comparator.comparing(UserDto::waiting).reversed()
+                .thenComparing(Comparator.comparing(UserDto::blocked).reversed())
                 .thenComparing(UserDto::username, String.CASE_INSENSITIVE_ORDER));
-        return new UsersView(list, blocked,
+        return new UsersView(list, blocked, waiting,
                 "Закрытый доступ — это не удаление: прогнозы, итоги и долги прошлых туров "
                         + "остаются на месте, а человек просто не может войти.");
     }
@@ -111,9 +119,39 @@ public class AppUsersService {
                         "Участник не найден"));
     }
 
+    /** Одобрить заявку: человек сможет войти под тем именем и паролем, что уже указал. */
+    @Transactional
+    public UserDto approve(AppUser me, Long userId) {
+        admins.require(me);
+        AppUser user = require(userId);
+        if (!user.isApproved()) {
+            user.approve(Instant.now());
+            users.save(user);
+        }
+        return toDto(user, me);
+    }
+
+    /**
+     * Отклонить заявку: запись убирается совсем, имя снова свободно. Это можно только с
+     * заявкой — у одобренного участника есть прогнозы и долги, его так не стирают.
+     */
+    @Transactional
+    public void reject(AppUser me, Long userId) {
+        admins.require(me);
+        AppUser user = require(userId);
+        if (user.isApproved()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Этот участник уже одобрен. Если нужно — закройте ему доступ.");
+        }
+        tokens.deleteAllOfUser(user.getId());
+        devices.deleteByUserId(user.getId());
+        users.delete(user);
+    }
+
     private UserDto toDto(AppUser user, AppUser me) {
         return new UserDto(user.getId(), user.getUsername(), user.getBadge(), admins.isAdmin(user),
                 user.isBlocked(), user.getBlockReason(), user.getBlockedAt(), user.getCreatedAt(),
-                members.ownsAnyGroup(user.getId()), user.getId().equals(me.getId()));
+                members.ownsAnyGroup(user.getId()), user.getId().equals(me.getId()),
+                !user.isApproved());
     }
 }

@@ -33,6 +33,10 @@ public class GroupRound {
     @Column(name = "title", length = 60)
     private String title;
 
+    /** Товарищеский тур: победитель есть, а шаурмы никто не должен. */
+    @Column(name = "friendly", nullable = false)
+    private boolean friendly;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -42,11 +46,12 @@ public class GroupRound {
     protected GroupRound() {
     }
 
-    public GroupRound(Long groupId, LocalDate roundKey, String title, Instant createdAt,
-                      Long createdBy) {
+    public GroupRound(Long groupId, LocalDate roundKey, String title, boolean friendly,
+                      Instant createdAt, Long createdBy) {
         this.groupId = groupId;
         this.roundKey = roundKey;
         this.title = title;
+        this.friendly = friendly;
         this.createdAt = createdAt;
         this.createdBy = createdBy;
     }
@@ -69,6 +74,15 @@ public class GroupRound {
 
     public void rename(String title) {
         this.title = title;
+    }
+
+    public boolean isFriendly() {
+        return friendly;
+    }
+
+    /** Переключить тур между игрой на шаурму и товарищеским. */
+    public void setFriendly(boolean friendly) {
+        this.friendly = friendly;
     }
 
     public Instant getCreatedAt() {

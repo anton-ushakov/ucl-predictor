@@ -127,12 +127,16 @@ public class RoundService {
             matchesByUser.computeIfAbsent((Long) pair[0], k -> new HashSet<>()).add((Long) pair[1]);
         }
 
-        // названия туров: их задают те, кто собирает состав
+        // названия и режим туров: их задают те, кто собирает состав
         Map<LocalDate, String> titles = new HashMap<>();
+        Set<LocalDate> friendly = new HashSet<>();
         for (com.example.predictor.domain.GroupRound round
                 : groupRounds.findByGroupIdAndRoundKeyBetweenOrderByRoundKeyAsc(groupId, from,
                 keysTo)) {
             titles.put(round.getRoundKey(), round.getTitle());
+            if (round.isFriendly()) {
+                friendly.add(round.getRoundKey());
+            }
         }
 
         List<RoundSummary> list = new ArrayList<>();
@@ -182,7 +186,8 @@ public class RoundService {
                     !RoundKeys.weekOf(week).isBefore(time.currentWeek())
                             && !RoundKeys.weekOf(week).isAfter(to),
                     ready, memberList.size(), canSelect,
-                    RoundKeys.noOf(week), titles.get(week), lastKickoff));
+                    RoundKeys.noOf(week), titles.get(week), lastKickoff,
+                    friendly.contains(week)));
         }
 
         // Текущая и следующая недели показываются всегда, даже если владелец ещё не выбрал матчи:
@@ -190,7 +195,8 @@ public class RoundService {
         for (LocalDate week = time.currentWeek(); !week.isAfter(to); week = week.plusWeeks(1)) {
             if (!byWeek.containsKey(week)) {
                 list.add(new RoundSummary(week, RoundStatus.UPCOMING, 0, 0, 0, null, true,
-                        0, memberList.size(), canSelect, 1, titles.get(week), null));
+                        0, memberList.size(), canSelect, 1, titles.get(week), null,
+                        friendly.contains(week)));
             }
         }
         // Ближайший тур — сверху: сначала текущая неделя и будущие по возрастанию,
@@ -396,7 +402,9 @@ public class RoundService {
                 groupRounds.findByGroupIdAndRoundKey(groupId, week)
                         .map(com.example.predictor.domain.GroupRound::getTitle).orElse(null),
                 weekMatches.get(0).getKickoffAt(),
-                weekMatches.get(weekMatches.size() - 1).getKickoffAt());
+                weekMatches.get(weekMatches.size() - 1).getKickoffAt(),
+                groupRounds.findByGroupIdAndRoundKey(groupId, week)
+                        .map(com.example.predictor.domain.GroupRound::isFriendly).orElse(false));
     }
 
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,

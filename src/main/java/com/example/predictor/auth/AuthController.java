@@ -87,7 +87,7 @@ public class AuthController {
     @PostMapping("/auth/register")
     @ResponseStatus(HttpStatus.CREATED)
     public AuthResponse register(@Valid @RequestBody RegisterRequest request) {
-        return auth.register(request.username(), request.password());
+        return signup(auth.register(request.username(), request.password()));
     }
 
     @PostMapping("/auth/login")
@@ -114,7 +114,7 @@ public class AuthController {
     /** Простой режим: первый вход, придумываем имя. */
     @PostMapping("/auth/simple/register")
     public AuthResponse registerSimple(@Valid @RequestBody SimpleAuthRequest request) {
-        return auth.registerSimple(request.username(), request.pin());
+        return signup(auth.registerSimple(request.username(), request.pin()));
     }
 
     /** Простой режим: вход на новом телефоне по тому же имени. */
@@ -190,5 +190,17 @@ public class AuthController {
             @Valid @RequestBody NewRecoveryCodeRequest request) {
         AppUser user = auth.authenticate(authorization);
         return auth.newRecoveryCode(user, request.password());
+    }
+
+    /**
+     * Заявку отдаём отказом с объяснением: учётная запись уже создана и ждёт одобрения,
+     * а впускать по ней пока нельзя.
+     */
+    private static AuthResponse signup(AuthService.SignupResult result) {
+        if (result.pending() != null) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.FORBIDDEN, result.pending());
+        }
+        return result.token();
     }
 }

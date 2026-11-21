@@ -49,6 +49,7 @@ public class RoundFinalizer {
     private final TransactionTemplate tx;
     private final ScoreDecisionService decisionService;
     private final DebtService debtService;
+    private final com.example.predictor.repository.GroupRoundRepository groupRounds;
     private final JokerService jokerService;
 
     public RoundFinalizer(PredictionRepository predictions, RoundMatches roundMatches,
@@ -56,7 +57,9 @@ public class RoundFinalizer {
                           GroupMemberRepository members, RulesService rulesService, AppTime time,
                           PlatformTransactionManager transactionManager,
                           ScoreDecisionService decisionService, DebtService debtService,
-                          JokerService jokerService) {
+                          JokerService jokerService,
+                          com.example.predictor.repository.GroupRoundRepository groupRounds) {
+        this.groupRounds = groupRounds;
         this.jokerService = jokerService;
         this.debtService = debtService;
         this.predictions = predictions;
@@ -157,8 +160,14 @@ public class RoundFinalizer {
                     r.winner(), r.loser(), tiebreakersCsv, rules.scoreBasis(), now));
         }
         results.saveAll(toSave);
-        // долговая книга: каждый проигравший должен шаурму каждому победителю
-        debtService.record(groupId, week, toSave, now);
+        // долговая книга: каждый проигравший должен шаурму каждому победителю.
+        // Товарищеский тур — исключение: победитель есть, а шаурмы нет.
+        boolean friendly = groupRounds.findByGroupIdAndRoundKey(groupId, week)
+                .map(com.example.predictor.domain.GroupRound::isFriendly)
+                .orElse(false);
+        if (!friendly) {
+            debtService.record(groupId, week, toSave, now);
+        }
         return true;
     }
 }

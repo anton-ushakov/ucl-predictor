@@ -71,7 +71,19 @@ public class SelectionController {
             @PathVariable("groupId") Long groupId,
             @Valid @RequestBody SelectionDtos.NewRoundRequest request) {
         AppUser user = auth.authenticate(authorization);
-        return service.createRound(user, groupId, request.week(), request.title());
+        return service.createRound(user, groupId, request.week(), request.title(),
+                Boolean.TRUE.equals(request.friendly()));
+    }
+
+    /** Товарищеский тур: победителя считаем, шаурму — нет. */
+    @PutMapping("/rounds/{roundKey}/friendly")
+    public SelectionDtos.RoundInfo setFriendly(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("roundKey") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate roundKey,
+            @Valid @RequestBody SelectionDtos.FriendlyRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        return service.setFriendly(user, groupId, roundKey, request.friendly());
     }
 
     /** Название тура: пустое — тур снова подписан датами своих матчей. */

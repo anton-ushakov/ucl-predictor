@@ -6,6 +6,7 @@
 #   ./sql.sh "SELECT ..."             — выполнить один запрос
 #   ./sql.sh --itogi                  — итоги туров: баллы, показатели, кто купил шаурму
 #   ./sql.sh --pravila                — какие правила заморожены у каждого тура
+#   ./sql.sh --matchi                 — матчи за сутки: статус, счёт и когда их трогали
 #
 # Зачем скрипт: порт базы наружу не открыт — её видит только приложение, —
 # поэтому pgAdmin с ноутбука подключается не к ней, а к своей, местной. Старые
@@ -52,9 +53,22 @@ ORDER BY r.round_week DESC;'
 SEYCHAS='SELECT name AS "группа", tiebreakers AS "показатели сейчас"
 FROM friend_groups ORDER BY id;'
 
+# Счёт не появился — смотреть надо сюда: что сервер успел записать и из какого источника
+MATCHI='SELECT m.kickoff_at AS "начало", c.short_name AS "турнир",
+       m.home_team AS "хозяева", m.away_team AS "гости", m.status AS "статус",
+       m.home_score AS "х", m.away_score AS "г",
+       m.live_home AS "х сейчас", m.live_away AS "г сейчас", m.source AS "источник"
+FROM matches m
+LEFT JOIN competitions c ON c.id = m.competition_id
+-- make_interval вместо interval: одинарные кавычки внутри такой строки sh не сохраняет
+WHERE m.kickoff_at > now() - make_interval(hours => 30)
+  AND m.kickoff_at < now() + make_interval(hours => 6)
+ORDER BY m.kickoff_at;'
+
 QUERY2=""
 case "$1" in
     --itogi)   QUERY="$ITOGI" ;;
+    --matchi)  QUERY="$MATCHI" ;;
     --pravila) QUERY="$PRAVILA"; QUERY2="$SEYCHAS" ;;
     "")        QUERY="" ;;
     *)         QUERY="$1" ;;

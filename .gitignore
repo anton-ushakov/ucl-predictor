@@ -3,5 +3,8 @@ target/
 *.iml
 .env
 backups/
+# Местные надстройки над docker-compose.yml: порт базы для pgAdmin и подобное.
+# Они свои на каждой машине и не должны мешать git pull.
+docker-compose.override.yml
 *.log
 firebase-service-account.json

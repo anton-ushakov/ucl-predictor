@@ -1,0 +1,26 @@
+# ============================================================
+# Порт базы для pgAdmin — только для своего компьютера, не для интернета.
+#
+# Скопируйте этот файл рядом, под именем docker-compose.override.yml:
+#
+#     cp docker-compose.override.example.yml docker-compose.override.yml
+#     docker compose up -d db
+#
+# Docker подхватывает docker-compose.override.yml сам, никаких ключей не нужно, и
+# git pull его не тронет: он в .gitignore. С домашним вариантом файл нужно называть
+# явно:  docker compose -f docker-compose.home.yml -f docker-compose.override.yml up -d db
+#
+# 127.0.0.1 в начале обязательно. Без него строка открыла бы базу всему интернету:
+# docker сам прописывает такие порты в брандмауэр, и ufw их не закрывает. С этой
+# привязкой порт виден только с самого сервера — и из ssh-туннеля, который вы
+# поднимаете со своего компьютера:
+#
+#     ssh -L 5433:localhost:5433 root@адрес-сервера
+#
+# После этого pgAdmin подключается к localhost:5433, база ucl_predictor,
+# пользователь predictor, пароль — DB_PASSWORD из .env на сервере.
+# ============================================================
+services:
+  db:
+    ports:
+      - "127.0.0.1:5433:5432"

@@ -383,18 +383,29 @@ public class RoundService {
         List<RoundResult> finalRows = results.findByGroupIdAndRoundWeekOrderByPlaceAscUserIdAsc(groupId, week);
         boolean finalized = !finalRows.isEmpty();
         List<StandingRow> standings = new ArrayList<>();
+        // Чем разводили равные баллы: без этого двое проигравших выглядят поломкой, хотя
+        // это просто совпали и баллы, и все показатели группы.
+        List<TiebreakNotes.Score> scores = new ArrayList<>();
         if (finalized) {
+            // показатели берём из сохранённых итогов: тур подведён по правилам своего времени
+            for (RoundResult r : finalRows) {
+                scores.add(new TiebreakNotes.Score(r.getUserId(), r.getPoints(),
+                        r.getExactScores(), r.getGoalDiffHits(), r.getGoalError(),
+                        r.getSubmittedAt()));
+            }
+            Map<Long, String> tiebreaks = TiebreakNotes.rowNotes(scores, rules.tiebreakers());
             for (RoundResult r : finalRows) {
                 UserLabel who = names.getOrDefault(r.getUserId(), UserLabel.UNKNOWN);
                 standings.add(new StandingRow(r.getUserId(), who.username(), who.badge(),
                         r.getPlace(), r.getPoints(), 0, r.getExactScores(), r.getOutcomeHits(),
                         r.getGoalDiffHits(), r.getGoalError(), r.isWinner(), r.isLoser(),
-                        leaders.contains(r.getUserId())));
+                        leaders.contains(r.getUserId()), tiebreaks.get(r.getUserId())));
             }
         } else {
             standings = provisional(weekMatches, memberList, all, rules, names, infos, jokers,
-                    leaders);
+                    leaders, scores);
         }
+        String tiebreakNote = TiebreakNotes.note(scores, rules.tiebreakers());
 
         boolean friendly = groupRounds.findByGroupIdAndRoundKey(groupId, week)
                 .map(com.example.predictor.domain.GroupRound::isFriendly).orElse(false);
@@ -451,13 +462,14 @@ public class RoundService {
                         .map(com.example.predictor.domain.GroupRound::getTitle).orElse(null),
                 weekMatches.get(0).getKickoffAt(),
                 weekMatches.get(weekMatches.size() - 1).getKickoffAt(),
-                friendly);
+                friendly, tiebreakNote);
     }
 
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,
                                           List<Prediction> all, Rules rules, Map<Long, UserLabel> names,
                                           Map<Long, ScoreDecisionService.Info> infos,
-                                          Map<Long, Long> jokers, Set<Long> leaders) {
+                                          Map<Long, Long> jokers, Set<Long> leaders,
+                                          List<TiebreakNotes.Score> scoresOut) {
         List<StandingsCalculator.FinishedMatch> finished = new ArrayList<>();
         // идущие матчи считаем отдельно: по ним видно, что будет, «если так и закончится»
         List<StandingsCalculator.FinishedMatch> live = new ArrayList<>();
@@ -495,6 +507,13 @@ public class RoundService {
         List<StandingsCalculator.Row> rows = StandingsCalculator.calculate(
                 participants, withLive, guesses, rules.tiebreakers(), rules.scoring(), jokers);
 
+        // показатели тех, кто сравнялся по баллам: по ним и расставлены места
+        for (StandingsCalculator.Row r : rows) {
+            scoresOut.add(new TiebreakNotes.Score(r.userId(), r.points(), r.exactScores(),
+                    r.goalDiffHits(), r.goalError(), r.submittedAt()));
+        }
+        Map<Long, String> tiebreaks = TiebreakNotes.rowNotes(scoresOut, rules.tiebreakers());
+
         List<StandingRow> result = new ArrayList<>();
         for (StandingsCalculator.Row r : rows) {
             // победитель и проигравший определяются только по окончании тура
@@ -502,7 +521,8 @@ public class RoundService {
             int done = settled.getOrDefault(r.userId(), 0);
             result.add(new StandingRow(r.userId(), who.username(), who.badge(), r.place(),
                     done, r.points() - done, r.exactScores(), r.outcomeHits(), r.goalDiffHits(),
-                    r.goalError(), false, false, leaders.contains(r.userId())));
+                    r.goalError(), false, false, leaders.contains(r.userId()),
+                    tiebreaks.get(r.userId())));
         }
         return result;
     }

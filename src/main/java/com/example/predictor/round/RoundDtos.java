@@ -97,10 +97,15 @@ public final class RoundDtos {
     }
 
     /** livePoints: баллы, которые набегают прямо сейчас по идущим матчам. */
+    /**
+     * tiebreak: показатели этого участника, когда по баллам он сравнялся с кем-то ещё
+     * («точных счетов 2 · ошибка по голам 7»). У остальных пусто: их место никто не
+     * оспаривает, и подпись только мешала бы читать таблицу.
+     */
     public record StandingRow(Long userId, String username, String badge,
                               int place, int points, int livePoints, int exactScores,
                               int outcomeHits, int goalDiffHits, int goalError,
-                              boolean winner, boolean loser, boolean leader) {
+                              boolean winner, boolean loser, boolean leader, String tiebreak) {
     }
 
     public record RoundView(LocalDate week, RoundStatus status, RulesDto rules, List<MatchView> matches,
@@ -110,7 +115,7 @@ public final class RoundDtos {
                             int pendingDecisions, int decisionsForMe, String note,
                             boolean jokerEnabled, Long jokerMatchId, int liveMatches,
                             int roundNo, String title, Instant firstKickoff, Instant lastKickoff,
-                            boolean friendly) {
+                            boolean friendly, String tiebreakNote) {
     }
 
     /**

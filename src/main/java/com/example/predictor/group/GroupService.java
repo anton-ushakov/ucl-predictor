@@ -32,7 +32,9 @@ import java.util.Locale;
 @Service
 public class GroupService {
 
-    public record GroupDto(Long id, String name, String inviteCode, int memberCount, GroupRole myRole) {
+    /** primary=true: с этой группы приложение открывается. */
+    public record GroupDto(Long id, String name, String inviteCode, int memberCount, GroupRole myRole,
+                           boolean primary) {
     }
 
     /** helper=true: участник может собирать состав тура, когда группа это разрешила. */
@@ -115,7 +117,8 @@ public class GroupService {
     public GroupDto create(AppUser current, String name) {
         FriendGroup group = groups.save(new FriendGroup(name.trim(), uniqueInviteCode()));
         members.save(new GroupMember(group, users.getReferenceById(current.getId()), GroupRole.OWNER));
-        return new GroupDto(group.getId(), group.getName(), visibleInviteCode(group), 1, GroupRole.OWNER);
+        return new GroupDto(group.getId(), group.getName(), visibleInviteCode(group), 1,
+                GroupRole.OWNER, group.getId().equals(current.getPrimaryGroupId()));
     }
 
     @Transactional
@@ -132,7 +135,8 @@ public class GroupService {
             role = GroupRole.MEMBER;
         }
         return new GroupDto(group.getId(), group.getName(), visibleInviteCode(group),
-                (int) members.countInGroup(group.getId()), role);
+                (int) members.countInGroup(group.getId()), role,
+                group.getId().equals(current.getPrimaryGroupId()));
     }
 
     @Transactional(readOnly = true)
@@ -141,9 +145,32 @@ public class GroupService {
         for (GroupMember m : members.findAllOfUser(current.getId())) {
             FriendGroup g = m.getGroup();
             result.add(new GroupDto(g.getId(), g.getName(), visibleInviteCode(g),
-                    (int) members.countInGroup(g.getId()), m.getRole()));
+                    (int) members.countInGroup(g.getId()), m.getRole(),
+                    g.getId().equals(current.getPrimaryGroupId())));
         }
         return result;
+    }
+
+    /**
+     * Делает группу основной: с неё приложение будет открываться. groupId=null — снова
+     * показывать список групп.
+     *
+     * Выбор хранится у участника, а не на телефоне: группа останется той же и после
+     * переустановки приложения. Чужую группу основной не сделать — сначала в неё нужно
+     * вступить.
+     */
+    @Transactional
+    public List<GroupDto> setPrimary(AppUser current, Long groupId) {
+        if (groupId != null) {
+            access.require(current, groupId);
+        }
+        AppUser user = users.findById(current.getId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Участник не найден"));
+        user.setPrimaryGroupId(groupId);
+        users.save(user);
+        current.setPrimaryGroupId(groupId);
+        return myGroups(current);
     }
 
     @Transactional(readOnly = true)
@@ -248,7 +275,8 @@ public class GroupService {
         group.rename(clean);
         groups.save(group);
         return new GroupDto(group.getId(), group.getName(), visibleInviteCode(group),
-                (int) members.countInGroup(group.getId()), GroupRole.OWNER);
+                (int) members.countInGroup(group.getId()), GroupRole.OWNER,
+                group.getId().equals(current.getPrimaryGroupId()));
     }
 
     /**
@@ -282,7 +310,8 @@ public class GroupService {
         group.changeInviteCode(uniqueInviteCode());
         groups.save(group);
         return new GroupDto(group.getId(), group.getName(), visibleInviteCode(group),
-                (int) members.countInGroup(group.getId()), GroupRole.OWNER);
+                (int) members.countInGroup(group.getId()), GroupRole.OWNER,
+                group.getId().equals(current.getPrimaryGroupId()));
     }
 
     private String uniqueInviteCode() {

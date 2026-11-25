@@ -2,6 +2,7 @@ package com.example.predictor.push;
 
 import com.example.predictor.domain.DeviceToken;
 import com.example.predictor.domain.Notification;
+import com.example.predictor.domain.NotificationType;
 import com.example.predictor.repository.DeviceTokenRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,6 +82,12 @@ public class PushSender {
     }
 
     private boolean send(String accessToken, String deviceToken, Notification n, List<String> dead) {
+        // Заголовок и текст обычно пишет сама система: так оповещение дойдёт, даже если
+        // приложение закрыто. У новой версии иначе: в её оповещении нужны кнопки «Скачать»
+        // и «Обновить», а нарисовать их может только приложение — значит, и показывать
+        // оповещение ему. Если оно в это время не работает, оповещение покажет опрос сервера.
+        boolean appDraws = n.getType() == NotificationType.APP_UPDATE;
+
         // данные нужны приложению, чтобы открыть нужный экран
         StringBuilder data = new StringBuilder("{")
                 .append("\"type\":\"").append(n.getType().name()).append("\",")
@@ -91,13 +98,17 @@ public class PushSender {
         if (n.getRoundWeek() != null) {
             data.append(",\"week\":\"").append(n.getRoundWeek()).append("\"");
         }
+        if (appDraws) {
+            data.append(",\"title\":\"").append(Json.escape(n.getTitle())).append("\"")
+                    .append(",\"body\":\"").append(Json.escape(n.getBody())).append("\"");
+        }
         data.append("}");
 
         String message = "{\"message\":{"
                 + "\"token\":\"" + Json.escape(deviceToken) + "\","
-                + "\"notification\":{"
-                + "\"title\":\"" + Json.escape(n.getTitle()) + "\","
-                + "\"body\":\"" + Json.escape(n.getBody()) + "\"},"
+                + (appDraws ? "" : "\"notification\":{"
+                        + "\"title\":\"" + Json.escape(n.getTitle()) + "\","
+                        + "\"body\":\"" + Json.escape(n.getBody()) + "\"},")
                 + "\"data\":" + data + ","
                 + "\"android\":{\"priority\":\"high\"}"
                 + "}}";

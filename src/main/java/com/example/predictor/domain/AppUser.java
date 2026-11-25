@@ -40,6 +40,14 @@ public class AppUser {
     @Column(name = "approved_at")
     private Instant approvedAt;
 
+    /**
+     * Основная группа: с неё открывается приложение. Пусто — показываем список групп,
+     * как раньше. Хранится у участника, а не на телефоне: после переустановки и на другом
+     * телефоне группа останется той же.
+     */
+    @Column(name = "primary_group_id")
+    private Long primaryGroupId;
+
     /** Доступ закрыт: человек не войдёт и оповещений не получит. */
     @Column(name = "blocked_at")
     private Instant blockedAt;
@@ -180,6 +188,15 @@ public class AppUser {
     public Instant getPinSetAt() { return pinSetAt; }
     public boolean isMustSetPin() { return mustSetPin; }
     public Instant getPinBlockedUntil() { return pinBlockedUntil; }
+
+    public Long getPrimaryGroupId() {
+        return primaryGroupId;
+    }
+
+    /** Сделать группу основной. null — снова открывать список групп. */
+    public void setPrimaryGroupId(Long groupId) {
+        this.primaryGroupId = groupId;
+    }
 
     public boolean isApproved() {
         return approvedAt != null;

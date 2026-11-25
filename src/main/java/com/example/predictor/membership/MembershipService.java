@@ -198,6 +198,12 @@ public class MembershipService {
         if (member.getRole() == GroupRole.OWNER) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Владельца исключить нельзя");
         }
+        // группа была у него основной: иначе приложение открывалось бы туда, куда уже нельзя
+        AppUser removed = member.getUser();
+        if (groupId.equals(removed.getPrimaryGroupId())) {
+            removed.setPrimaryGroupId(null);
+            users.save(removed);
+        }
         members.delete(member);
     }
 

@@ -148,6 +148,19 @@ public class RoundService {
             }
         }
 
+        // кто выиграл сыгранные туры: в списке это видно сразу, без захода в тур
+        Map<Long, String> memberNames = new HashMap<>();
+        for (GroupMember gm : memberList) {
+            memberNames.put(gm.getUser().getId(), UserLabel.of(gm.getUser()).username());
+        }
+        Map<LocalDate, List<String>> winners = new HashMap<>();
+        for (RoundResult r : results.findByGroupIdOrderByRoundWeekDescPlaceAscUserIdAsc(groupId)) {
+            if (r.isWinner()) {
+                winners.computeIfAbsent(r.getRoundWeek(), k -> new ArrayList<>())
+                        .add(memberNames.getOrDefault(r.getUserId(), "участник"));
+            }
+        }
+
         List<RoundSummary> list = new ArrayList<>();
         for (Map.Entry<LocalDate, List<FootballMatch>> e : byWeek.entrySet()) {
             LocalDate week = e.getKey();
@@ -156,7 +169,14 @@ public class RoundService {
             int open = 0;
             boolean started = false;
             boolean allOver = true;
+            // турниры тура: в одном туре их бывает несколько, поэтому список, а не один
+            List<String> competitions = new ArrayList<>();
             for (FootballMatch m : e.getValue()) {
+                String label = m.getCompetition() == null ? null
+                        : m.getCompetition().getShortName();
+                if (label != null && !label.isBlank() && !competitions.contains(label)) {
+                    competitions.add(label);
+                }
                 if (!m.getStatus().isTerminal()) {
                     allOver = false;
                 }
@@ -196,7 +216,7 @@ public class RoundService {
                             && !RoundKeys.weekOf(week).isAfter(to),
                     ready, memberList.size(), canSelect,
                     RoundKeys.noOf(week), titles.get(week), lastKickoff,
-                    friendly.contains(week)));
+                    friendly.contains(week), competitions, winnerOf(winners.get(week))));
         }
 
         // Текущая и следующая недели показываются всегда, даже если владелец ещё не выбрал матчи:
@@ -205,7 +225,7 @@ public class RoundService {
             if (!byWeek.containsKey(week)) {
                 list.add(new RoundSummary(week, RoundStatus.UPCOMING, 0, 0, 0, null, true,
                         0, memberList.size(), canSelect, 1, titles.get(week), null,
-                        friendly.contains(week)));
+                        friendly.contains(week), List.of(), null));
             }
         }
         // Ближайший тур — сверху: сначала текущая неделя и будущие по возрастанию,
@@ -214,6 +234,11 @@ public class RoundService {
         LocalDate current = time.currentWeek();
         list.sort(Comparator.comparingLong((RoundSummary r) -> distanceKey(r.week(), current)));
         return list;
+    }
+
+    /** Победитель тура одной строкой: обычно один, но при равенстве баллов бывает и двое. */
+    private static String winnerOf(List<String> names) {
+        return names == null || names.isEmpty() ? null : String.join(", ", names);
     }
 
     /**

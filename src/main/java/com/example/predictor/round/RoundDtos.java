@@ -116,11 +116,14 @@ public final class RoundDtos {
     /**
      * matches: сколько матчей владелец отобрал в этот тур. selectable=true: состав тура ещё можно
      * менять (это текущая или следующая неделя), и владельцу группы показывается кнопка выбора матчей.
+     * competitions: короткие обозначения турниров тура («ЛЧ», «АПЛ») — по ним видно, что внутри,
+     * не заходя в тур; winner: кто выиграл тур, когда он уже сыгран.
      */
     public record RoundSummary(LocalDate week, RoundStatus status, int matches, int predictedByMe,
                                int openForMe, Instant firstKickoff, boolean selectable,
                                int membersPredicted, int memberCount, boolean canSelect,
-                               int roundNo, String title, Instant lastKickoff, boolean friendly) {
+                               int roundNo, String title, Instant lastKickoff, boolean friendly,
+                               List<String> competitions, String winner) {
     }
 
     public record Entry(@NotNull Long matchId,

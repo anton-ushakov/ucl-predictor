@@ -82,6 +82,19 @@ public class GroupController {
         return groups.myGroups(user);
     }
 
+    /** groupId=null — открывать список групп, как раньше. */
+    public record PrimaryGroupRequest(Long groupId) {
+    }
+
+    /** Основная группа: с неё открывается приложение. В ответ — весь список с новой отметкой. */
+    @PutMapping("/primary")
+    public List<GroupDto> setPrimary(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @RequestBody PrimaryGroupRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        return groups.setPrimary(user, request.groupId());
+    }
+
     @GetMapping("/{groupId}")
     public GroupDetailDto detail(@RequestHeader(value = "Authorization", required = false) String authorization,
                                  @PathVariable("groupId") Long groupId) {

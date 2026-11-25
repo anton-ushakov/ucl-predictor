@@ -160,7 +160,9 @@ public class StandingsService {
             groups.add(new GroupDto(e.getKey().isEmpty() ? null : e.getKey(), e.getValue()));
         }
         return new TableDto(competition.getId(), competition.getName(), groups, updated,
-                "Таблица турнира приходит от источника и обновляется раз в час.");
+                "Таблица турнира приходит от источника и обновляется раз в час. Кружки — "
+                        + "последние матчи команды, свежий справа; пустые кружки значат, что "
+                        + "матчей мы знаем меньше пяти.");
     }
 
     /**

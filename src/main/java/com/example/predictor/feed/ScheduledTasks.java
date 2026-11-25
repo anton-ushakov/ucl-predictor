@@ -60,6 +60,45 @@ public class ScheduledTasks {
         }
     }
 
+    /**
+     * Счёт матчей, которые идут прямо сейчас, из football-data.org.
+     *
+     * Общее обновление ходит раз в полчаса, и для игрового вечера это слишком редко: матч
+     * кончился, а счёта в приложении ещё двадцать минут нет. Здесь спрашиваются только
+     * турниры с идущими матчами и только пара дней вокруг сегодняшнего, поэтому запросов
+     * уходит немного, а в тихие дни не уходит ни одного.
+     *
+     * Сразу следом подводятся итоги и готовятся оповещения: иначе счёт уже обновился, а
+     * «итог тура» пришёл бы через полчаса.
+     */
+    @Scheduled(initialDelayString = "PT90S", fixedDelayString = "${app.football-data.live-interval:PT5M}")
+    public void playing() {
+        if (!client.isConfigured()) {
+            return;
+        }
+        try {
+            MatchSyncService.Result r = sync.syncPlaying();
+            if (r.competitions() == 0) {
+                return;
+            }
+            log.info("Идущие матчи обновлены: турниров {}, получено {}, обновлено {}",
+                    r.competitions(), r.fetched(), r.updated());
+        } catch (RuntimeException e) {
+            log.warn("Не удалось обновить счёт идущих матчей: {}", e.getMessage());
+            return;
+        }
+        try {
+            finalizer.finalizeReadyRounds();
+        } catch (RuntimeException e) {
+            log.error("Ошибка при подведении итогов туров", e);
+        }
+        try {
+            notifications.generate();
+        } catch (RuntimeException e) {
+            log.error("Ошибка при подготовке оповещений", e);
+        }
+    }
+
     @Scheduled(initialDelayString = "PT20S", fixedDelayString = "${app.football-data.sync-interval:PT30M}")
     public void run() {
         if (client.isConfigured()) {

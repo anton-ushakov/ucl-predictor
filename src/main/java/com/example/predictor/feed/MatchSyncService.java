@@ -13,6 +13,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -67,14 +68,35 @@ public class MatchSyncService {
         this.pause = pause;
     }
 
+    /**
+     * Матчи турниров, в которых прямо сейчас играют. Раз в полчаса для игрового вечера
+     * слишком редко: матч кончился, а счёта ещё двадцать минут нет. Поэтому пока идёт хоть
+     * один матч, спрашиваем только его турниры и только за пару дней вокруг сегодняшнего —
+     * это один запрос на турнир, и лимит от такого не страдает.
+     */
+    public Result syncPlaying() {
+        Instant now = Instant.now();
+        // окно назад: матч давно начался, но итог от источника может опоздать
+        List<Long> playing = matches.findCompetitionsPlaying(
+                now.minus(Duration.ofHours(5)), now);
+        if (playing.isEmpty()) {
+            return new Result(0, 0, 0, 0, 0);
+        }
+        LocalDate today = LocalDate.now(time.zone());
+        return syncAll(competitions.findAllById(playing), today.minusDays(1), today.plusDays(1));
+    }
+
     /** Обновляет матчи всех включённых турниров, которые загружаются автоматически. */
     public Result sync() {
         LocalDate from = time.currentWeek().minusWeeks(WEEKS_BACK);
         LocalDate to = time.lastPredictableWeek().plusDays(6);
-        Result total = new Result(0, 0, 0, 0, 0);
+        return syncAll(competitions
+                .findBySourceAndSyncedTrueAndEnabledTrueOrderBySortOrderAsc(MatchSource.FOOTBALL_DATA),
+                from, to);
+    }
 
-        List<Competition> list = competitions
-                .findBySourceAndSyncedTrueAndEnabledTrueOrderBySortOrderAsc(MatchSource.FOOTBALL_DATA);
+    private Result syncAll(Iterable<Competition> list, LocalDate from, LocalDate to) {
+        Result total = new Result(0, 0, 0, 0, 0);
         boolean first = true;
         for (Competition competition : list) {
             String code = competition.getCode();

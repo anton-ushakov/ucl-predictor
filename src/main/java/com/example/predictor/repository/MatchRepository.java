@@ -82,6 +82,20 @@ public interface MatchRepository extends JpaRepository<FootballMatch, Long> {
             java.time.Instant to);
 
     /**
+     * Турниры, в которых прямо сейчас кто-то играет: матч начался, а итог ещё не пришёл.
+     * По ним счёт спрашивается часто, по остальным — раз в полчаса, как и раньше.
+     */
+    @Query("""
+            select distinct m.competition.id from FootballMatch m
+             where m.competition is not null
+               and m.status in (com.example.predictor.domain.MatchStatus.SCHEDULED,
+                                com.example.predictor.domain.MatchStatus.LIVE)
+               and m.kickoffAt between :from and :to
+            """)
+    List<Long> findCompetitionsPlaying(@Param("from") java.time.Instant from,
+                                       @Param("to") java.time.Instant to);
+
+    /**
      * Сыгранные матчи этих команд, свежие сверху: по ним считается форма, когда источник
      * её не присылает.
      */

@@ -205,6 +205,9 @@ public class AuthService {
         }
         AppUser user = users.findById(current.getId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Участник не найден"));
+        // Владелец приложения опознаётся по имени из настроек сервера: переименовавшись,
+        // он потеряет свои права молча — вместе с рассылкой версий и заявками.
+        boolean losesAdmin = admins.isAdmin(user) && !admins.ids().contains(user.getId());
         user.rename(name);
         try {
             users.save(user);
@@ -212,7 +215,14 @@ public class AuthService {
         } catch (DataIntegrityViolationException e) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Это имя уже занято");
         }
-        return new MeResponseName(name, "Теперь вас зовут " + name + ". Входить тоже под этим именем");
+        String message = "Теперь вас зовут " + name + ". Входить тоже под этим именем";
+        if (losesAdmin && !admins.isAdmin(user)) {
+            message += ". Вы владелец приложения, а он опознаётся по имени: впишите в "
+                    + "ADMIN_USERNAMES на сервере id:" + user.getId()
+                    + " и перезапустите его, иначе права владельца пропадут. По номеру они "
+                    + "больше не потеряются при переименовании";
+        }
+        return new MeResponseName(name, message);
     }
 
     /** Ответ на смену имени. */
@@ -366,6 +376,11 @@ public class AuthService {
         }
         for (String name : admins.names()) {
             if (users.existsByUsernameIgnoreCase(name)) {
+                return true;
+            }
+        }
+        for (Long id : admins.ids()) {
+            if (users.existsById(id)) {
                 return true;
             }
         }

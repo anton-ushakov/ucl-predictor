@@ -59,7 +59,6 @@ public class RoundService {
         } + " Сохранить?";
     }
 
-    private static final int HISTORY_WEEKS_BACK = 12;
     /** Прошедшие туры идут после будущих: сдвиг больше любого расстояния в днях. */
     private static final long PAST_OFFSET = 1_000_000L;
 
@@ -80,6 +79,7 @@ public class RoundService {
     private final com.example.predictor.repository.StandingRowRepository standingRows;
     private final com.example.predictor.repository.HeadToHeadRepository headToHead;
     private final com.example.predictor.feed.TeamFormService teamForm;
+    private final SeasonService seasons;
 
     public RoundService(GroupAccess access, RulesService rulesService,
                         PredictionRepository predictions, RoundResultRepository results,
@@ -91,7 +91,9 @@ public class RoundService {
                         com.example.predictor.repository.GroupRoundRepository groupRounds,
                         com.example.predictor.repository.StandingRowRepository standingRows,
                         com.example.predictor.repository.HeadToHeadRepository headToHead,
-                        com.example.predictor.feed.TeamFormService teamForm) {
+                        com.example.predictor.feed.TeamFormService teamForm,
+                        SeasonService seasons) {
+        this.seasons = seasons;
         this.teamForm = teamForm;
         this.groupRounds = groupRounds;
         this.standingRows = standingRows;
@@ -119,7 +121,13 @@ public class RoundService {
         FriendGroup group = ms.group();
         // собирать тур может не каждый: без этого права кнопка выбора матчей не нужна
         boolean canSelect = GroupAccess.canSelectMatches(ms);
-        LocalDate from = time.currentWeek().minusWeeks(HISTORY_WEEKS_BACK);
+        // Сыгранные туры остаются в списке весь сезон: он для того и собран по месяцам.
+        // Раньше показывались только последние недели, и тур постарше просто исчезал —
+        // вместе с возможностью открыть его и пересчитать итоги.
+        LocalDate from = seasons.rangeOf(groupId, null).from();
+        if (from == null) {
+            from = LocalDate.of(2000, 1, 1);
+        }
         LocalDate to = time.lastPredictableWeek();
         // туры ищем по ключам: у второго тура недели ключ — день после понедельника
         LocalDate keysTo = time.lastRoundKey();

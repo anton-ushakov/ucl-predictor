@@ -38,8 +38,9 @@ public class GroupService {
     }
 
     /** helper=true: участник может собирать состав тура, когда группа это разрешила. */
+    /** leader — жёлтая майка (лидер сезона), lastWinner — красная (выиграл последний тур). */
     public record MemberDto(Long userId, String username, String badge, GroupRole role,
-                            boolean helper, boolean leader) {
+                            boolean helper, boolean leader, boolean lastWinner) {
     }
 
     /**
@@ -177,12 +178,13 @@ public class GroupService {
     public GroupDetailDto detail(AppUser current, Long groupId) {
         Membership ms = access.require(current, groupId);
         FriendGroup g = ms.group();
-        // жёлтая майка лидера сезона
-        java.util.Set<Long> leaders = leaderService.leaders(groupId);
+        // майки: жёлтая у лидера сезона, красная у победителя последнего тура
+        com.example.predictor.round.LeaderService.Jerseys jerseys = leaderService.jerseys(groupId);
         List<MemberDto> memberDtos = members.findAllWithUser(g.getId()).stream()
                 .map(m -> new MemberDto(m.getUser().getId(), m.getUser().getUsername(),
                         m.getUser().getBadge(), m.getRole(), m.isHelper(),
-                        leaders.contains(m.getUser().getId())))
+                        jerseys.leader(m.getUser().getId()),
+                        jerseys.lastWinner(m.getUser().getId())))
                 .toList();
         SettingsDto settings = new SettingsDto(g.getLockMinutesBefore(),
                 g.tiebreakerList().stream().map(Enum::name).toList(), g.getRevealMode(),
@@ -253,8 +255,9 @@ public class GroupService {
                         "В этой группе нет такого участника"));
         member.setHelper(helper);
         members.save(member);
+        // майки здесь не нужны: ответ про одну роль, экран перечитает список целиком
         return new MemberDto(userId, member.getUser().getUsername(), member.getUser().getBadge(),
-                member.getRole(), member.isHelper(), false);
+                member.getRole(), member.isHelper(), false, false);
     }
 
     /**

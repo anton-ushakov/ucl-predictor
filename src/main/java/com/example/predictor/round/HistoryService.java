@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,10 +38,13 @@ public class HistoryService {
                                List<ResultRow> rows, List<String> buyers, List<String> receivers) {
     }
 
-    /** leader=true: жёлтая майка — больше всех выигранных туров в этом зачёте. */
+    /**
+     * leader=true: жёлтая майка — первая строка зачёта. lastWinner=true: красная майка —
+     * выиграл последний сыгранный тур.
+     */
     public record LeaderRow(Long userId, String username, String badge, boolean leader,
                             int place, int rounds, int totalPoints,
-                            int exactScores, int wins, int losses) {
+                            int exactScores, int wins, int losses, boolean lastWinner) {
     }
 
     private final GroupAccess access;
@@ -106,6 +110,9 @@ public class HistoryService {
         SeasonService.Range range = seasons.rangeOf(groupId, seasonId);
 
         List<LeaderboardCalculator.ResultLine> lines = new ArrayList<>();
+        // попутно запоминаем победителей последнего тура этого зачёта: это красная майка
+        LocalDate lastRound = null;
+        Set<Long> lastWinners = new HashSet<>();
         for (RoundResult r : results.findByGroupIdOrderByRoundWeekDescPlaceAscUserIdAsc(groupId)) {
             if (range.from() != null && r.getRoundWeek().isBefore(range.from())) {
                 continue;
@@ -115,21 +122,26 @@ public class HistoryService {
             }
             lines.add(new LeaderboardCalculator.ResultLine(r.getUserId(), r.getPoints(), r.getExactScores(),
                     r.isWinner(), r.isLoser()));
+            if (lastRound == null || r.getRoundWeek().isAfter(lastRound)) {
+                lastRound = r.getRoundWeek();
+                lastWinners.clear();
+            }
+            if (r.getRoundWeek().equals(lastRound) && r.isWinner()) {
+                lastWinners.add(r.getUserId());
+            }
         }
         List<LeaderboardCalculator.Row> rows = LeaderboardCalculator.calculate(lines,
                 questions.bonusPoints(groupId, range.from(), range.to()));
-        Map<Long, Integer> wins = new HashMap<>();
-        for (LeaderboardCalculator.Row r : rows) {
-            wins.put(r.userId(), r.wins());
-        }
-        Set<Long> leaders = LeaderService.topOf(wins);
-
+        // Жёлтая майка — у верхней строки зачёта, и только у неё: майка лидера на двоих
+        // ничего не значит. Красная — у победителя последнего тура этого же зачёта.
+        Long leader = rows.isEmpty() ? null : rows.get(0).userId();
         List<LeaderRow> board = new ArrayList<>();
         for (LeaderboardCalculator.Row r : rows) {
             UserLabel who = names.getOrDefault(r.userId(), UserLabel.UNKNOWN);
             board.add(new LeaderRow(r.userId(), who.username(), who.badge(),
-                    leaders.contains(r.userId()), r.place(), r.rounds(),
-                    r.totalPoints(), r.exactScores(), r.wins(), r.losses()));
+                    leader != null && leader == r.userId(), r.place(), r.rounds(),
+                    r.totalPoints(), r.exactScores(), r.wins(), r.losses(),
+                    lastWinners.contains(r.userId())));
         }
         return board;
     }

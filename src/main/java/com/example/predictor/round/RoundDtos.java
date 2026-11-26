@@ -44,7 +44,7 @@ public final class RoundDtos {
     public record OtherPrediction(Long userId, String username, String badge,
                                   int homeGoals, int awayGoals,
                                   Instant savedAt, Integer points, boolean joker,
-                                  boolean leader) {
+                                  boolean leader, boolean lastWinner) {
     }
 
     /**
@@ -105,7 +105,8 @@ public final class RoundDtos {
     public record StandingRow(Long userId, String username, String badge,
                               int place, int points, int livePoints, int exactScores,
                               int outcomeHits, int goalDiffHits, int goalError,
-                              boolean winner, boolean loser, boolean leader, String tiebreak) {
+                              boolean winner, boolean loser, boolean leader, boolean lastWinner,
+                              String tiebreak) {
     }
 
     public record RoundView(LocalDate week, RoundStatus status, RulesDto rules, List<MatchView> matches,

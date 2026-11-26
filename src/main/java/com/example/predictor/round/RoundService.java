@@ -279,8 +279,8 @@ public class RoundService {
 
         // джокеры тура: userId → matchId. Баллы за этот матч считаются вдвойне
         Map<Long, Long> jokers = jokerService.forRound(groupId, week);
-        // жёлтая майка: у кого больше всего побед в текущем сезоне
-        Set<Long> leaders = leaderService.leaders(groupId);
+        // майки: жёлтая у лидера сезона, красная у победителя последнего тура
+        LeaderService.Jerseys jerseys = leaderService.jerseys(groupId);
 
         List<Prediction> all = predictions.findForRound(groupId, week);
         Map<Long, List<Prediction>> byMatch = new HashMap<>();
@@ -346,7 +346,8 @@ public class RoundService {
                         others.add(new OtherPrediction(p.getUser().getId(), who.username(), who.badge(),
                                 p.getHomeGoals(), p.getAwayGoals(), p.getCreatedAt(),
                                 pointsFor(m, p, info, rules.scoring(), hisJoker), hisJoker,
-                                leaders.contains(p.getUser().getId())));
+                                jerseys.leader(p.getUser().getId()),
+                                jerseys.lastWinner(p.getUser().getId())));
                     }
                 }
             }
@@ -399,11 +400,12 @@ public class RoundService {
                 standings.add(new StandingRow(r.getUserId(), who.username(), who.badge(),
                         r.getPlace(), r.getPoints(), 0, r.getExactScores(), r.getOutcomeHits(),
                         r.getGoalDiffHits(), r.getGoalError(), r.isWinner(), r.isLoser(),
-                        leaders.contains(r.getUserId()), tiebreaks.get(r.getUserId())));
+                        jerseys.leader(r.getUserId()), jerseys.lastWinner(r.getUserId()),
+                        tiebreaks.get(r.getUserId())));
             }
         } else {
             standings = provisional(weekMatches, memberList, all, rules, names, infos, jokers,
-                    leaders, scores);
+                    jerseys, scores);
         }
         String tiebreakNote = TiebreakNotes.note(scores, rules.tiebreakers());
 
@@ -470,7 +472,7 @@ public class RoundService {
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,
                                           List<Prediction> all, Rules rules, Map<Long, UserLabel> names,
                                           Map<Long, ScoreDecisionService.Info> infos,
-                                          Map<Long, Long> jokers, Set<Long> leaders,
+                                          Map<Long, Long> jokers, LeaderService.Jerseys jerseys,
                                           List<TiebreakNotes.Score> scoresOut) {
         List<StandingsCalculator.FinishedMatch> finished = new ArrayList<>();
         // идущие матчи считаем отдельно: по ним видно, что будет, «если так и закончится»
@@ -523,7 +525,8 @@ public class RoundService {
             int done = settled.getOrDefault(r.userId(), 0);
             result.add(new StandingRow(r.userId(), who.username(), who.badge(), r.place(),
                     done, r.points() - done, r.exactScores(), r.outcomeHits(), r.goalDiffHits(),
-                    r.goalError(), false, false, leaders.contains(r.userId()),
+                    r.goalError(), false, false, jerseys.leader(r.userId()),
+                    jerseys.lastWinner(r.userId()),
                     tiebreaks.get(r.userId())));
         }
         return result;

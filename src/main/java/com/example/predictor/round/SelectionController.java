@@ -50,7 +50,12 @@ public class SelectionController {
         return service.setAuto(user, groupId, competitionId, request.enabled());
     }
 
-    /** Матчи турнира за неделю тура: что уже в туре, что можно добавить. */
+    /**
+     * Матчи турнира, которые можно положить в тур: что уже в нём, что можно добавить.
+     *
+     * Адрес с датой в пути остался прежним, чтобы старые версии приложения продолжали
+     * работать: эта дата теперь просто ключ тура, и недели она не значит.
+     */
     @GetMapping("/rounds/{week}/selection")
     public SelectionView selection(
             @RequestHeader(value = "Authorization", required = false) String authorization,
@@ -60,7 +65,7 @@ public class SelectionController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate roundKey,
             @RequestParam(value = "competitionId", required = false) Long competitionId) {
         AppUser user = auth.authenticate(authorization);
-        return service.selectable(user, groupId, week, roundKey, competitionId);
+        return service.selectable(user, groupId, roundKey == null ? week : roundKey, competitionId);
     }
 
     /** Новый тур в неделе: отдельный зачёт и отдельная шаурма. */
@@ -71,7 +76,7 @@ public class SelectionController {
             @PathVariable("groupId") Long groupId,
             @Valid @RequestBody SelectionDtos.NewRoundRequest request) {
         AppUser user = auth.authenticate(authorization);
-        return service.createRound(user, groupId, request.week(), request.title(),
+        return service.createRound(user, groupId, request.title(),
                 Boolean.TRUE.equals(request.friendly()));
     }
 

@@ -39,20 +39,20 @@ public final class SelectionDtos {
     }
 
     /**
-     * Тур недели, в который можно положить матчи. Матч живёт ровно в одном туре, поэтому
-     * сначала выбирают тур, а потом отмечают матчи.
+     * Тур, в который можно положить матчи. Матч живёт ровно в одном туре, поэтому сначала
+     * выбирают тур, а потом отмечают матчи.
      */
-    public record RoundOption(LocalDate key, int no, String title, int matches,
+    public record RoundOption(LocalDate key, String title, int matches,
                               Instant firstKickoff, Instant lastKickoff, boolean friendly) {
     }
 
     /** Экран отбора матчей: турниры, матчи выбранного турнира и что с ними можно делать. */
-    public record SelectionView(LocalDate week, Long competitionId, boolean canEdit,
+    public record SelectionView(Long competitionId, boolean canEdit,
                                 boolean manualCompetition, boolean autoCompetition,
                                 int selectedInRound,
                                 List<CompetitionDto> competitions, List<SelectableMatch> matches,
                                 String note,
-                                LocalDate roundKey, int roundNo, String roundTitle,
+                                LocalDate roundKey, String roundTitle,
                                 boolean roundFriendly, List<RoundOption> rounds) {
     }
 
@@ -60,13 +60,17 @@ public final class SelectionDtos {
     public record AutoRequest(boolean enabled) {
     }
 
-    /** roundKey: в какой тур недели класть матчи. Не указан — первый тур недели матча. */
+    /** roundKey: в какой тур класть матчи. Не указан — тур дня самого матча. */
     public record SelectRequest(@NotEmpty(message = "Не выбрано ни одного матча") List<Long> matchIds,
                                 LocalDate roundKey) {
     }
 
-    /** Новый тур в неделе: название необязательное, по умолчанию играют на шаурму. */
-    public record NewRoundRequest(@NotNull(message = "Укажите неделю") LocalDate week,
+    /**
+     * Новый тур: название необязательное, по умолчанию играют на шаурму. Недели тур больше
+     * не знает — даты он берёт из своих матчей, а поле week оставлено для старых версий
+     * приложения и ни на что не влияет.
+     */
+    public record NewRoundRequest(LocalDate week,
                                   @Size(max = 60) String title,
                                   Boolean friendly) {
     }
@@ -79,7 +83,7 @@ public final class SelectionDtos {
     }
 
     /** Созданный или переименованный тур. */
-    public record RoundInfo(LocalDate key, int no, String title, boolean friendly,
+    public record RoundInfo(LocalDate key, String title, boolean friendly,
                             String message) {
     }
 

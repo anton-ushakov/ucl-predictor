@@ -27,13 +27,16 @@ public class ScheduledTasks {
     private final com.example.predictor.round.AutoSelectionService autoSelection;
     private final ApiFootballSyncService apiFootball;
     private final com.example.predictor.round.RoundRecountService recount;
+    private final com.example.predictor.round.TopMatchesService topMatches;
 
     public ScheduledTasks(FootballDataClient client, MatchSyncService sync, RoundFinalizer finalizer,
                           NotificationGenerator notifications,
                           com.example.predictor.round.AutoSelectionService autoSelection,
                           ApiFootballSyncService apiFootball,
                           ExtraDataSyncService extra,
-                          com.example.predictor.round.RoundRecountService recount) {
+                          com.example.predictor.round.RoundRecountService recount,
+                          com.example.predictor.round.TopMatchesService topMatches) {
+        this.topMatches = topMatches;
         this.recount = recount;
         this.extra = extra;
         this.apiFootball = apiFootball;
@@ -137,6 +140,11 @@ public class ScheduledTasks {
             autoSelection.run();
         } catch (RuntimeException e) {
             log.error("Ошибка автосостава туров", e);
+        }
+        try {
+            topMatches.run();
+        } catch (RuntimeException e) {
+            log.error("Ошибка подборки топ-матчей", e);
         }
         try {
             finalizer.finalizeReadyRounds();

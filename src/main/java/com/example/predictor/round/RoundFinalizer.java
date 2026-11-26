@@ -60,6 +60,7 @@ public class RoundFinalizer {
     private final com.example.predictor.repository.GroupRoundRepository groupRounds;
     private final JokerService jokerService;
     private final ShawarmaDebtRepository debts;
+    private final ExhibitionService exhibition;
 
     public RoundFinalizer(PredictionRepository predictions, RoundMatches roundMatches,
                           RoundResultRepository results, FriendGroupRepository groups,
@@ -68,8 +69,9 @@ public class RoundFinalizer {
                           ScoreDecisionService decisionService, DebtService debtService,
                           JokerService jokerService,
                           com.example.predictor.repository.GroupRoundRepository groupRounds,
-                          ShawarmaDebtRepository debts,
+                          ShawarmaDebtRepository debts, ExhibitionService exhibition,
                           @Value("${app.rounds.settle-delay:PT2H30M}") Duration settleDelay) {
+        this.exhibition = exhibition;
         this.debts = debts;
         this.settleDelay = settleDelay;
         this.groupRounds = groupRounds;
@@ -95,11 +97,11 @@ public class RoundFinalizer {
 
     /** Подводит итоги всех туров, которые уже можно подвести. Возвращает число подведённых туров. */
     public int finalizeReadyRounds() {
-        LocalDate currentWeek = time.currentWeek();
+        LocalDate today = LocalDate.now(time.zone());
         int done = 0;
         for (GroupRoundKey gr : predictions.findGroupRounds()) {
-            // ключ второго тура недели — день после понедельника, сравнивать нужно недели
-            if (RoundKeys.weekOf(gr.roundWeek()).isAfter(currentWeek)) {
+            // ключ тура — служебная дата, и будущий тур подводить нечего: матчи ещё не сыграны
+            if (gr.roundWeek().isAfter(today.plusDays(1))) {
                 continue;
             }
             if (results.existsByGroupIdAndRoundWeek(gr.groupId(), gr.roundWeek())) {
@@ -204,9 +206,11 @@ public class RoundFinalizer {
             return false;
         }
 
+        // кто играет вне конкурса: баллы им считаем, победителя и проигравшего — без них
+        Set<Long> outOfCompetition = exhibition.of(groupId, week);
         List<StandingsCalculator.Row> rows = StandingsCalculator.calculate(
                 participants, finished, guesses, rules.tiebreakers(), rules.scoring(),
-                jokerService.forRound(groupId, week));
+                jokerService.forRound(groupId, week), outOfCompetition);
 
         String tiebreakersCsv = Tiebreaker.toCsv(rules.tiebreakers());
         List<RoundResult> toSave = new ArrayList<>();

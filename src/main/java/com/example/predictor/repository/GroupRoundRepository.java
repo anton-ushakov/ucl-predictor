@@ -17,4 +17,7 @@ public interface GroupRoundRepository extends JpaRepository<GroupRound, Long> {
     List<GroupRound> findByGroupIdOrderByRoundKeyDesc(Long groupId);
 
     boolean existsByGroupIdAndRoundKey(Long groupId, LocalDate roundKey);
+
+    /** Тур, собранный автоматически: «CL:5» — пятый тур Лиги чемпионов, «TOP:14» — топ-матчи. */
+    Optional<GroupRound> findByGroupIdAndSourceKey(Long groupId, String sourceKey);
 }

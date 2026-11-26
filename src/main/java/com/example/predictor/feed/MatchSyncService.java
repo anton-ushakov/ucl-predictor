@@ -189,6 +189,7 @@ public class MatchSyncService {
                         s == null ? null : s.extraHome(), s == null ? null : s.extraAway(),
                         s == null ? null : s.penHome(), s == null ? null : s.penAway(),
                         s == null ? null : s.duration());
+                match.applyTeamIds(m.homeTeamId(), m.awayTeamId());
                 matches.save(match);
                 if (scoreFixed) {
                     matches.flush();

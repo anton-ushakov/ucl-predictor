@@ -45,6 +45,16 @@ public class FootballMatch {
     @Column(name = "away_team", nullable = false, length = 100)
     private String awayTeam;
 
+    /**
+     * Номера команд у источника. По ним матч связывается с таблицей своего турнира:
+     * по названиям это ненадёжно — в матче «Man United», в таблице «Manchester United FC».
+     */
+    @Column(name = "home_team_id")
+    private Long homeTeamId;
+
+    @Column(name = "away_team_id")
+    private Long awayTeamId;
+
     @Column(name = "kickoff_at", nullable = false)
     private Instant kickoffAt;
 
@@ -307,6 +317,24 @@ public class FootballMatch {
     }
 
     /** Голы хозяев по выбранному в группе счёту (null, пока матч не сыгран). */
+    public Long getHomeTeamId() {
+        return homeTeamId;
+    }
+
+    public Long getAwayTeamId() {
+        return awayTeamId;
+    }
+
+    /** Номера команд из источника: отдельно от applyFeed, потому что приходят не всегда. */
+    public void applyTeamIds(Long home, Long away) {
+        if (home != null) {
+            this.homeTeamId = home;
+        }
+        if (away != null) {
+            this.awayTeamId = away;
+        }
+    }
+
     public Integer scoreHome(ScoreBasis basis) {
         if (homeScore == null) {
             return null;

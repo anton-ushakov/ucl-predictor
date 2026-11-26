@@ -77,10 +77,18 @@ public class FriendGroup {
     @Column(name = "joker_enabled", nullable = false)
     private boolean jokerEnabled = false;
 
+    /**
+     * Подборка «Топ-матчи»: матчи пяти больших чемпионатов, у которых сумма мест команд в
+     * своей таблице не больше десяти. Туры собираются сами, по номерам туров чемпионатов.
+     */
+    @Column(name = "top_matches", nullable = false)
+    private boolean topMatches = false;
+
     public void changeSettings(int lockMinutesBefore, List<Tiebreaker> tiebreakerList, RevealMode revealMode,
                                ScoreBasis scoreBasis, SubmissionMode submissionMode, Scoring scoring,
                                boolean useRussianNames, boolean jokerEnabled,
-                               MatchSelection matchSelection) {
+                               MatchSelection matchSelection, boolean topMatches) {
+        this.topMatches = topMatches;
         this.matchSelection = matchSelection;
         this.useRussianNames = useRussianNames;
         this.jokerEnabled = jokerEnabled;
@@ -129,5 +137,6 @@ public class FriendGroup {
     public RevealMode getRevealMode() { return revealMode; }
     public boolean isUseRussianNames() { return useRussianNames; }
     public boolean isJokerEnabled() { return jokerEnabled; }
+    public boolean isTopMatches() { return topMatches; }
     public MatchSelection getMatchSelection() { return matchSelection; }
 }

@@ -2,10 +2,12 @@ package com.example.predictor.round;
 
 import com.example.predictor.common.AppTime;
 import com.example.predictor.domain.FootballMatch;
+import com.example.predictor.domain.Competition;
 import com.example.predictor.domain.FriendGroup;
 import com.example.predictor.domain.GroupAutoCompetition;
 import com.example.predictor.domain.GroupMember;
 import com.example.predictor.domain.GroupRole;
+import com.example.predictor.domain.GroupRound;
 import com.example.predictor.domain.MatchStatus;
 import com.example.predictor.domain.RoundMatch;
 import com.example.predictor.group.RulesService;
@@ -25,7 +27,11 @@ import java.util.List;
 
 /**
  * Автоматический состав тура. Владелец отмечает турнир — например, Лигу чемпионов, — и все его
- * матчи попадают в тур сами. Это страховка от забытого тура: без выбранных матчей тура нет.
+ * матчи попадают в туры сами. Это страховка от забытого тура: без выбранных матчей тура нет.
+ *
+ * Тур группы повторяет тур турнира: пятый тур Лиги чемпионов целиком — это один тур группы с
+ * названием «Лига чемпионов», а не «неделя с 24 по 30 ноября», куда заодно попали бы матчи
+ * чемпионатов. Так совпадает с тем, как об этом говорят болельщики.
  *
  * Добавляются только матчи, приём прогнозов на которые ещё открыт. Убранный вручную матч
  * при включённом автосоставе вернётся — чтобы исключить матч, автосостав турнира выключают.
@@ -40,13 +46,15 @@ public class AutoSelectionService {
     private final GroupMemberRepository members;
     private final MatchRepository matches;
     private final RoundMatchRepository selection;
+    private final AutoRounds autoRounds;
     private final RulesService rulesService;
     private final AppTime time;
 
     public AutoSelectionService(GroupAutoCompetitionRepository autos, FriendGroupRepository groups,
                                 GroupMemberRepository members, MatchRepository matches,
                                 RoundMatchRepository selection, RulesService rulesService,
-                                AppTime time) {
+                                AppTime time, AutoRounds autoRounds) {
+        this.autoRounds = autoRounds;
         this.autos = autos;
         this.groups = groups;
         this.members = members;
@@ -91,22 +99,30 @@ public class AutoSelectionService {
             return 0;
         }
         LocalDate from = time.currentWeek();
-        LocalDate to = time.lastPredictableWeek();
+        LocalDate to = time.lastPredictableWeek().plusDays(6);
         Instant now = Instant.now();
         List<FootballMatch> list = matches.findForSelection(competitionId, groupId, from, to);
+        Competition competition = list.isEmpty() ? null : list.get(0).getCompetition();
         int added = 0;
         for (FootballMatch m : list) {
             if (m.getStatus() != MatchStatus.SCHEDULED) {
                 continue;
             }
-            Instant lockAt = rulesService.rulesFor(group, m.getRoundWeek()).lockAt(m.getKickoffAt());
-            if (RevealPolicy.locked(now, lockAt, m.getStatus())) {
-                continue;
-            }
             if (selection.findByGroupIdAndMatchId(groupId, m.getId()).isPresent()) {
                 continue;
             }
-            selection.save(new RoundMatch(groupId, m.getRoundWeek(), m.getId(), ownerId, now));
+            // тур турнира целиком: ключ у него свой, и это уже не календарная неделя
+            String sourceKey = AutoRounds.sourceKeyOf(
+                    m.getCompetition() == null ? competition : m.getCompetition(), m, time.zone());
+            String title = m.getCompetition() == null ? null : m.getCompetition().getName();
+            GroupRound round = autoRounds.findOrCreate(groupId, sourceKey, title,
+                    LocalDate.ofInstant(m.getKickoffAt(), time.zone()), ownerId, now);
+            Instant lockAt = rulesService.rulesFor(group, round.getRoundKey())
+                    .lockAt(m.getKickoffAt());
+            if (RevealPolicy.locked(now, lockAt, m.getStatus())) {
+                continue;
+            }
+            selection.save(new RoundMatch(groupId, round.getRoundKey(), m.getId(), ownerId, now));
             added++;
         }
         return added;

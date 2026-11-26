@@ -12,9 +12,13 @@ import java.time.LocalDate;
 /**
  * Тур группы.
  *
- * Ключ тура — дата: для первого тура недели это её понедельник, для второго вторник той же
- * недели, и так далее. Участник этих дат не видит: в приложении тур подписан датами своих
- * матчей и названием, если его задали.
+ * Ключ тура — дата, и это служебная метка, а не смысл: на ней держатся прогнозы, итоги,
+ * долги и ссылки в оповещениях. Участник её не видит — в приложении тур подписан датами
+ * своих матчей и названием.
+ *
+ * sourceKey говорит, из чего тур собран: «CL:5» — пятый тур Лиги чемпионов, «TOP:14» —
+ * подборка топ-матчей. По нему автосостав второй раз находит свой тур и дополняет его,
+ * а не заводит рядом ещё один. У тура, собранного руками, он пуст.
  */
 @Entity
 @Table(name = "group_rounds")
@@ -33,6 +37,9 @@ public class GroupRound {
     @Column(name = "title", length = 60)
     private String title;
 
+    @Column(name = "source_key", length = 40)
+    private String sourceKey;
+
     /** Товарищеский тур: победитель есть, а шаурмы никто не должен. */
     @Column(name = "friendly", nullable = false)
     private boolean friendly;
@@ -48,6 +55,12 @@ public class GroupRound {
 
     public GroupRound(Long groupId, LocalDate roundKey, String title, boolean friendly,
                       Instant createdAt, Long createdBy) {
+        this(groupId, roundKey, title, friendly, createdAt, createdBy, null);
+    }
+
+    public GroupRound(Long groupId, LocalDate roundKey, String title, boolean friendly,
+                      Instant createdAt, Long createdBy, String sourceKey) {
+        this.sourceKey = sourceKey;
         this.groupId = groupId;
         this.roundKey = roundKey;
         this.title = title;
@@ -66,6 +79,10 @@ public class GroupRound {
 
     public LocalDate getRoundKey() {
         return roundKey;
+    }
+
+    public String getSourceKey() {
+        return sourceKey;
     }
 
     public String getTitle() {

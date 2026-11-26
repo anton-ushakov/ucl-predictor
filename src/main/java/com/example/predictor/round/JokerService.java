@@ -79,7 +79,7 @@ public class JokerService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Джокер в этой группе выключен: включите его в настройках");
         }
-        if (RoundKeys.weekOf(week).isAfter(time.lastPredictableWeek())) {
+        if (week.isAfter(time.lastRoundKey())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Этот тур ещё не открыт");
         }
         if (existing != null && !existing.getMatchId().equals(matchId)) {

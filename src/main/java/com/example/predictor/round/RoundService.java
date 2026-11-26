@@ -75,6 +75,7 @@ public class RoundService {
     private final TeamNamesService teamNames;
     private final JokerService jokerService;
     private final LeaderService leaderService;
+    private final ExhibitionService exhibitionService;
     private final com.example.predictor.repository.GroupRoundRepository groupRounds;
     private final com.example.predictor.repository.StandingRowRepository standingRows;
     private final com.example.predictor.repository.HeadToHeadRepository headToHead;
@@ -85,6 +86,7 @@ public class RoundService {
                         GroupMemberRepository members, AppUserRepository users, AppTime time,
                         ScoreDecisionService decisionService, RoundMatches roundMatches,
                         JokerService jokerService, LeaderService leaderService,
+                        ExhibitionService exhibitionService,
                         TeamNamesService teamNames,
                         com.example.predictor.repository.GroupRoundRepository groupRounds,
                         com.example.predictor.repository.StandingRowRepository standingRows,
@@ -98,6 +100,7 @@ public class RoundService {
         this.roundMatches = roundMatches;
         this.jokerService = jokerService;
         this.leaderService = leaderService;
+        this.exhibitionService = exhibitionService;
         this.access = access;
         this.rulesService = rulesService;
         this.predictions = predictions;
@@ -212,20 +215,23 @@ public class RoundService {
                     RoundStatus.of(finalized.contains(week), started, allOver,
                             weeksWithPredictions.contains(week)),
                     e.getValue().size(), predicted, open, e.getValue().get(0).getKickoffAt(),
-                    !RoundKeys.weekOf(week).isBefore(time.currentWeek())
-                            && !RoundKeys.weekOf(week).isAfter(to),
+                    // состав тура ещё можно менять: тур не из прошлого и не дальше окна
+                    !week.isBefore(time.currentWeek()) && !week.isAfter(to.plusDays(6)),
                     ready, memberList.size(), canSelect,
-                    RoundKeys.noOf(week), titles.get(week), lastKickoff,
+                    titles.get(week), lastKickoff,
                     friendly.contains(week), competitions, winnerOf(winners.get(week))));
         }
 
-        // Текущая и следующая недели показываются всегда, даже если владелец ещё не выбрал матчи:
-        // иначе ему некуда нажать, чтобы их выбрать.
-        for (LocalDate week = time.currentWeek(); !week.isAfter(to); week = week.plusWeeks(1)) {
-            if (!byWeek.containsKey(week)) {
-                list.add(new RoundSummary(week, RoundStatus.UPCOMING, 0, 0, 0, null, true,
-                        0, memberList.size(), canSelect, 1, titles.get(week), null,
-                        friendly.contains(week), List.of(), null));
+        // Пустые туры показываются только тому, кто собирает состав: ему нужно место, куда
+        // нажать, чтобы выбрать матчи. Остальным тур без матчей не говорит ничего — это ещё
+        // не тур, а заготовка, и в списке он только мешает.
+        if (canSelect) {
+            for (LocalDate week = time.currentWeek(); !week.isAfter(to); week = week.plusWeeks(1)) {
+                if (!byWeek.containsKey(week)) {
+                    list.add(new RoundSummary(week, RoundStatus.UPCOMING, 0, 0, 0, null, true,
+                            0, memberList.size(), canSelect, titles.get(week), null,
+                            friendly.contains(week), List.of(), null));
+                }
             }
         }
         // Ближайший тур — сверху: сначала текущая неделя и будущие по возрастанию,
@@ -440,7 +446,16 @@ public class RoundService {
             }
         }
 
-        boolean canSubmit = open > 0 && !RoundKeys.weekOf(week).isAfter(time.lastPredictableWeek());
+        // кто играет вне конкурса: их баллы в таблице есть, а шаурма их не касается
+        Set<Long> outOfCompetition = exhibitionService.of(groupId, week);
+        List<String> outOfNames = new ArrayList<>();
+        for (GroupMember gm : memberList) {
+            if (outOfCompetition.contains(gm.getUser().getId())) {
+                outOfNames.add(UserLabel.of(gm.getUser()).username());
+            }
+        }
+
+        boolean canSubmit = open > 0 && !week.isAfter(time.lastRoundKey());
         RoundStatus status = RoundStatus.of(finalized, started, allOver, !all.isEmpty());
         String note = status == RoundStatus.NO_PREDICTIONS
                 ? "Тур завершён. Никто из участников не делал прогнозов, поэтому итоги не подводились."
@@ -459,14 +474,14 @@ public class RoundService {
                 views, canSubmit, open, submitWarning(rules.submissionMode()), finalized, standings, buyers, receivers,
                 notParticipated, ScoreDecisionService.countPending(infos.values()), decisionsForMe, note,
                 group.isJokerEnabled(), jokers.get(me), liveMatches,
-                RoundKeys.noOf(week),
                 groupRounds.findByGroupIdAndRoundKey(groupId, week)
                         .map(com.example.predictor.domain.GroupRound::getTitle).orElse(null),
                 weekMatches.get(0).getKickoffAt(),
                 weekMatches.get(weekMatches.size() - 1).getKickoffAt(),
                 friendly, tiebreakNote,
                 // пересчёт нужен, только когда итоги уже подведены, и только владельцу
-                finalized && ms.isOwner());
+                finalized && ms.isOwner(),
+                outOfCompetition.contains(me), !finalized && !friendly, outOfNames);
     }
 
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,
@@ -544,9 +559,9 @@ public class RoundService {
         Membership ms = access.require(user, groupId);
         FriendGroup group = ms.group();
         requireRoundKey(week);
-        if (RoundKeys.weekOf(week).isAfter(time.lastPredictableWeek())) {
+        if (week.isAfter(time.lastRoundKey())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Приём прогнозов на этот тур ещё не открыт: можно прогнозировать текущую и следующую неделю");
+                    "Приём прогнозов на этот тур ещё не открыт: он слишком далеко впереди");
         }
 
         List<FootballMatch> weekMatches = roundMatches.forRound(groupId, week);

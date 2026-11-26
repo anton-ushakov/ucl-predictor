@@ -52,7 +52,9 @@ public class GroupService {
                               SubmissionMode submissionMode,
                               int exactScorePoints, int goalDiffPoints, int outcomePoints,
                               String scoringDescription, boolean useRussianNames,
-                              boolean jokerEnabled, MatchSelection matchSelection) {
+                              boolean jokerEnabled, MatchSelection matchSelection,
+                              /** Подборка «Топ-матчи» из пяти больших чемпионатов. */
+                              boolean topMatches) {
     }
 
     /**
@@ -191,7 +193,7 @@ public class GroupService {
                 g.scoreBasis().extraTime(), g.scoreBasis().penalties(), g.getSubmissionMode(),
                 g.scoring().exactScorePoints(), g.scoring().goalDiffPoints(),
                 g.scoring().outcomePoints(), g.scoring().describe(), g.isUseRussianNames(),
-                g.isJokerEnabled(), g.getMatchSelection());
+                g.isJokerEnabled(), g.getMatchSelection(), g.isTopMatches());
         List<OptionDto> tiebreakerOptions = Arrays.stream(Tiebreaker.values())
                 .map(t -> new OptionDto(t.name(), t.getDescription())).toList();
         List<OptionDto> revealOptions = Arrays.stream(RevealMode.values())
@@ -212,7 +214,8 @@ public class GroupService {
                                       List<String> tiebreakerNames, RevealMode revealMode,
                                       ScoreBasis scoreBasis, SubmissionMode submissionMode,
                                       Scoring scoring, boolean useRussianNames,
-                                      boolean jokerEnabled, MatchSelection matchSelection) {
+                                      boolean jokerEnabled, MatchSelection matchSelection,
+                                      boolean topMatches) {
         Membership ms = access.requireOwner(current, groupId);
         FriendGroup group = ms.group();
 
@@ -235,12 +238,12 @@ public class GroupService {
         }
 
         group.changeSettings(lockMinutesBefore, tiebreakers, revealMode, scoreBasis, submissionMode,
-                scoring, useRussianNames, jokerEnabled, matchSelection);
+                scoring, useRussianNames, jokerEnabled, matchSelection, topMatches);
         groups.save(group);
         return new SettingsDto(lockMinutesBefore, tiebreakers.stream().map(Enum::name).toList(), revealMode,
                 scoreBasis.extraTime(), scoreBasis.penalties(), submissionMode,
                 scoring.exactScorePoints(), scoring.goalDiffPoints(), scoring.outcomePoints(),
-                scoring.describe(), useRussianNames, jokerEnabled, matchSelection);
+                scoring.describe(), useRussianNames, jokerEnabled, matchSelection, topMatches);
     }
 
     /**

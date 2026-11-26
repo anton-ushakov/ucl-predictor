@@ -89,29 +89,23 @@ public class MatchSelectionService {
     }
 
     /**
-     * Матчи турнира, которые можно отобрать в тур. Если турнир не указан, берётся первый в списке.
-     * Смотреть может любой участник, менять состав тура — только владелец.
+     * Матчи турнира, которые можно отобрать в тур.
+     *
+     * Показываются все матчи турнира до конца окна прогнозов, а не одной недели: тур Лиги
+     * чемпионов идёт со вторника по четверг, тур Англии — с субботы по понедельник, и делить
+     * их по календарным неделям было неудобно. Отметки относятся к выбранному туру; матч,
+     * занятый соседним туром, виден, но взять его нельзя — он живёт ровно в одном туре.
+     *
+     * Смотреть может любой участник, менять состав тура — только тот, кто его собирает.
      */
     @Transactional(readOnly = true)
-    public SelectionView selectable(AppUser user, Long groupId, LocalDate week, Long competitionId) {
-        return selectable(user, groupId, week, null, competitionId);
-    }
-
-    /**
-     * То же, но для конкретного тура недели: в неделе их может быть несколько, и отметки
-     * относятся к выбранному. Матч, занятый соседним туром, виден, но взять его нельзя —
-     * он живёт ровно в одном туре.
-     */
-    @Transactional(readOnly = true)
-    public SelectionView selectable(AppUser user, Long groupId, LocalDate week, LocalDate roundKey,
+    public SelectionView selectable(AppUser user, Long groupId, LocalDate roundKey,
                                     Long competitionId) {
         Membership ms = access.require(user, groupId);
         FriendGroup group = ms.group();
-        requireMonday(week);
-        LocalDate key = roundKey == null ? week : roundKey;
-        if (!RoundKeys.weekOf(key).equals(week)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Тур не из этой недели");
-        }
+        LocalDate key = roundKey == null ? firstFreeKey(groupId) : roundKey;
+        LocalDate from = time.currentWeek();
+        LocalDate to = time.lastPredictableWeek().plusDays(6);
 
         List<Competition> all = competitions.findByEnabledTrueOrderBySortOrderAscNameAsc();
         if (all.isEmpty()) {
@@ -133,20 +127,20 @@ public class MatchSelectionService {
         for (RoundMatch rm : selected) {
             selectedIds.add(rm.getMatchId());
         }
-        // матчи, занятые другими турами той же недели
+        // матчи, занятые другими турами группы
         Set<Long> takenElsewhere = new HashSet<>();
-        for (RoundMatch rm : selection.findByGroupIdAndRoundWeekBetween(groupId, week,
-                week.plusDays(RoundKeys.MAX_PER_WEEK - 1L))) {
+        for (RoundMatch rm : selection.findByGroupIdAndRoundWeekBetween(groupId,
+                from.minusWeeks(4), to.plusWeeks(4))) {
             if (!rm.getRoundWeek().equals(key)) {
                 takenElsewhere.add(rm.getMatchId());
             }
         }
 
-        List<FootballMatch> list = matches.findForSelection(chosen.getId(), groupId, week, week);
+        List<FootballMatch> list = matches.findForSelection(chosen.getId(), groupId, from, to);
         Set<Long> predicted = list.isEmpty() ? Set.of()
                 : new HashSet<>(predictions.findPredictedMatchIds(groupId, ids(list)));
 
-        Rules rules = rulesService.rulesFor(group, week);
+        Rules rules = rulesService.rulesFor(group, key);
         TeamNameMap names = teamNames.mapFor(group);
         Instant now = Instant.now();
         List<SelectableMatch> views = new ArrayList<>();
@@ -170,11 +164,11 @@ public class MatchSelectionService {
         Set<Long> auto = autoIds(groupId);
         com.example.predictor.domain.GroupRound round =
                 rounds.findByGroupIdAndRoundKey(groupId, key).orElse(null);
-        return new SelectionView(week, chosen.getId(), GroupAccess.canSelectMatches(ms), !chosen.isSynced(),
+        return new SelectionView(chosen.getId(), GroupAccess.canSelectMatches(ms), !chosen.isSynced(),
                 auto.contains(chosen.getId()), selected.size(),
                 all.stream().map(c -> toDto(c, auto)).toList(), views, note,
-                key, RoundKeys.noOf(key), round == null ? null : round.getTitle(),
-                round != null && round.isFriendly(), roundsOfWeek(groupId, week));
+                key, round == null ? null : round.getTitle(),
+                round != null && round.isFriendly(), roundOptions(groupId));
     }
 
     // ------------------------------------------------------------------ состав тура
@@ -210,10 +204,9 @@ public class MatchSelectionService {
             String title = teamLabels.display(m.getHomeTeam()) + " — "
                     + teamLabels.display(m.getAwayTeam());
             fail(SelectionRules.checkWeek(title, m.getRoundWeek(), first, last));
-            if (roundKey != null && !RoundKeys.weekOf(roundKey).equals(m.getRoundWeek())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "Матч " + title + " относится к другой неделе, в этот тур его не положить");
-            }
+            // Тур больше не привязан к неделе: в один тур можно сложить матчи любых дней.
+            // Так тур Лиги чемпионов со вторника по четверг и тур Англии с субботы по
+            // понедельник остаются каждый одним туром, как их и считают болельщики.
             week = roundKey == null ? m.getRoundWeek() : roundKey;
             Rules rules = rulesService.rulesFor(ms.group(), week);
             if (RevealPolicy.locked(now, rules.lockAt(m.getKickoffAt()), m.getStatus())) {
@@ -258,38 +251,42 @@ public class MatchSelectionService {
     // ------------------------------------------------------------------ туры недели
 
     /**
-     * Новый тур в неделе: Лига чемпионов отдельным зачётом, чемпионаты другим. Ключом служит
-     * первый свободный день недели, но участник его не видит — тур подписан своими матчами
-     * и названием, если его задали.
+     * Новый тур: Лига чемпионов отдельным зачётом, чемпионаты другим.
+     *
+     * Сколько туров и когда — дело группы: ни недели, ни ограничения на их число больше нет.
+     * Ключом служит первый свободный день, но участник его не видит: тур подписан своими
+     * матчами и названием, если его задали.
      */
     @Transactional
-    public SelectionDtos.RoundInfo createRound(AppUser user, Long groupId, LocalDate week,
-                                               String title, boolean friendly) {
+    public SelectionDtos.RoundInfo createRound(AppUser user, Long groupId, String title,
+                                               boolean friendly) {
         Membership ms = access.require(user, groupId);
         requireSelector(ms);
-        requireMonday(week);
-        fail(SelectionRules.checkWeek("новый тур", week, time.currentWeek(),
-                time.lastPredictableWeek()));
-
-        LocalDate key = null;
-        for (int no = 1; no <= RoundKeys.MAX_PER_WEEK; no++) {
-            LocalDate candidate = RoundKeys.keyFor(week, no);
-            if (!rounds.existsByGroupIdAndRoundKey(groupId, candidate)) {
-                key = candidate;
-                break;
-            }
-        }
-        if (key == null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "В одной неделе больше " + RoundKeys.MAX_PER_WEEK + " туров не бывает");
-        }
+        LocalDate key = firstFreeKey(groupId);
         String clean = clean(title);
         rounds.save(new com.example.predictor.domain.GroupRound(groupId, key, clean, friendly,
                 Instant.now(), user.getId()));
-        return new SelectionDtos.RoundInfo(key, RoundKeys.noOf(key), clean, friendly,
+        return new SelectionDtos.RoundInfo(key, clean, friendly,
                 friendly
                         ? "Товарищеский тур создан: победитель будет, а шаурмы никто не должен."
                         : "Тур создан. Отметьте матчи, которые в него войдут.");
+    }
+
+    /**
+     * Свободный день для ключа нового тура. Ключ — служебная метка, и его смысл только в
+     * том, чтобы не совпасть с другим туром этой группы; показываются же даты матчей.
+     */
+    private LocalDate firstFreeKey(Long groupId) {
+        LocalDate day = LocalDate.now(time.zone());
+        for (int i = 0; i < 400; i++) {
+            if (!rounds.existsByGroupIdAndRoundKey(groupId, day)
+                    && selection.findByGroupIdAndRoundWeek(groupId, day).isEmpty()) {
+                return day;
+            }
+            day = day.plusDays(1);
+        }
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Не нашлось свободного дня для нового тура");
     }
 
     /** Переименовать тур: пустое название — снова по датам матчей. */
@@ -303,7 +300,7 @@ public class MatchSelectionService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Тур не найден"));
         String clean = clean(title);
         round.rename(clean);
-        return new SelectionDtos.RoundInfo(roundKey, RoundKeys.noOf(roundKey), clean,
+        return new SelectionDtos.RoundInfo(roundKey, clean,
                 round.isFriendly(), clean == null ? "Название убрано" : "Название сохранено");
     }
 
@@ -324,26 +321,28 @@ public class MatchSelectionService {
                     "Итоги тура уже подведены, менять правила задним числом поздно");
         }
         round.setFriendly(friendly);
-        return new SelectionDtos.RoundInfo(roundKey, RoundKeys.noOf(roundKey), round.getTitle(),
-                friendly,
+        return new SelectionDtos.RoundInfo(roundKey, round.getTitle(), friendly,
                 friendly
                         ? "Товарищеский тур: победителя посчитаем, шаурму — нет"
                         : "Играем на шаурму: проигравший кормит победителя");
     }
 
-    /** Туры недели с их матчами: из чего выбирать, когда кладёшь матчи в тур. */
-    private List<SelectionDtos.RoundOption> roundsOfWeek(Long groupId, LocalDate week) {
-        LocalDate lastKey = week.plusDays(RoundKeys.MAX_PER_WEEK - 1L);
+    /**
+     * Туры, в которые можно положить матчи: идущие и будущие, с их матчами. Прошедшие не
+     * показываем — состав сыгранного тура уже не меняют.
+     */
+    private List<SelectionDtos.RoundOption> roundOptions(Long groupId) {
+        LocalDate from = time.currentWeek();
+        LocalDate to = time.lastPredictableWeek().plusDays(6);
         Map<LocalDate, List<Long>> matchesOf = new java.util.TreeMap<>();
-        for (RoundMatch rm : selection.findByGroupIdAndRoundWeekBetween(groupId, week, lastKey)) {
+        for (RoundMatch rm : selection.findByGroupIdAndRoundWeekBetween(groupId, from, to)) {
             matchesOf.computeIfAbsent(rm.getRoundWeek(), k -> new ArrayList<>()).add(rm.getMatchId());
         }
         java.util.TreeSet<LocalDate> keys = new java.util.TreeSet<>(matchesOf.keySet());
         for (com.example.predictor.domain.GroupRound round
-                : rounds.findByGroupIdAndRoundKeyBetweenOrderByRoundKeyAsc(groupId, week, lastKey)) {
+                : rounds.findByGroupIdAndRoundKeyBetweenOrderByRoundKeyAsc(groupId, from, to)) {
             keys.add(round.getRoundKey());
         }
-        keys.add(week); // первый тур недели есть всегда, даже пока он пуст
 
         List<SelectionDtos.RoundOption> options = new ArrayList<>();
         for (LocalDate key : keys) {
@@ -363,7 +362,7 @@ public class MatchSelectionService {
                     .orElse(null);
             boolean friendly = rounds.findByGroupIdAndRoundKey(groupId, key)
                     .map(com.example.predictor.domain.GroupRound::isFriendly).orElse(false);
-            options.add(new SelectionDtos.RoundOption(key, RoundKeys.noOf(key), title, ids.size(),
+            options.add(new SelectionDtos.RoundOption(key, title, ids.size(),
                     firstKickoff, lastKickoff, friendly));
         }
         return options;
@@ -595,10 +594,4 @@ public class MatchSelectionService {
                 + ". Матчей добавлено в туры: " + added);
     }
 
-    private static void requireMonday(LocalDate week) {
-        if (!RoundWeeks.mondayOf(week).equals(week)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Тур обозначается датой понедельника, например 2026-11-09");
-        }
-    }
 }

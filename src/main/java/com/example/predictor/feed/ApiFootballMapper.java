@@ -36,7 +36,9 @@ public final class ApiFootballMapper {
                 item.fixture().id(), home, away,
                 logo(item.teams().home()), logo(item.teams().away()),
                 kickoff, RoundWeeks.mondayOf(kickoff, zone),
-                stage(item.league()), matchday(item.league()), status, parts(item, status)));
+                stage(item.league()), matchday(item.league()), status, parts(item, status),
+                // номера команд у api-sports свои и с таблицами football-data не сходятся
+                null, null));
     }
 
     /** Состояния у источника свои: переводим их в наши четыре. */

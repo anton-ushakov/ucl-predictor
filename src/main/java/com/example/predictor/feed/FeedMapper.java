@@ -24,7 +24,7 @@ public final class FeedMapper {
     public record Mapped(long externalId, String homeTeam, String awayTeam,
                          String homeCrest, String awayCrest, Instant kickoffAt,
                          LocalDate roundWeek, String stage, Integer matchday, MatchStatus status,
-                         Parts score) {
+                         Parts score, Long homeTeamId, Long awayTeamId) {
     }
 
     private FeedMapper() {
@@ -52,7 +52,8 @@ public final class FeedMapper {
         return Optional.of(new Mapped(
                 m.id(), home, away, crest(m.homeTeam()), crest(m.awayTeam()),
                 kickoff, RoundWeeks.mondayOf(kickoff, zone),
-                truncate(m.stage(), 40), m.matchday(), status(m.status()), parts(m.score())));
+                truncate(m.stage(), 40), m.matchday(), status(m.status()), parts(m.score()),
+                m.homeTeam().id(), m.awayTeam().id()));
     }
 
     /** Адрес эмблемы. Берём только https: картинку по http телефон не покажет. */

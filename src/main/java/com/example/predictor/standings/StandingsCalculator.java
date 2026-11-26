@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Подсчёт таблицы тура: баллы, дополнительные показатели, места, победители и проигравшие.
@@ -61,6 +62,14 @@ public final class StandingsCalculator {
     public static List<Row> calculate(Collection<Long> participants, List<FinishedMatch> matches,
                                       Collection<Guess> guesses, List<Tiebreaker> tiebreakers,
                                       Scoring scoring, Map<Long, Long> jokers) {
+        return calculate(participants, matches, guesses, tiebreakers, scoring, jokers, Set.of());
+    }
+
+    /** То же, но часть участников играет вне конкурса: шаурма их не касается. */
+    public static List<Row> calculate(Collection<Long> participants, List<FinishedMatch> matches,
+                                      Collection<Guess> guesses, List<Tiebreaker> tiebreakers,
+                                      Scoring scoring, Map<Long, Long> jokers,
+                                      Set<Long> outOfCompetition) {
         Map<Long, Map<Long, Guess>> byUser = new HashMap<>();
         for (Guess g : guesses) {
             byUser.computeIfAbsent(g.userId(), k -> new HashMap<>()).put(g.matchId(), g);
@@ -100,7 +109,7 @@ public final class StandingsCalculator {
             }
             rows.add(new Row(userId, points, exact, outcome, diff, error, last, 0, false, false));
         }
-        return rank(rows, tiebreakers);
+        return rank(rows, tiebreakers, outOfCompetition);
     }
 
     /**
@@ -109,6 +118,19 @@ public final class StandingsCalculator {
      * Если все участники делят одно место, победителей и проигравших нет.
      */
     public static List<Row> rank(List<Row> rows, List<Tiebreaker> tiebreakers) {
+        return rank(rows, tiebreakers, Set.of());
+    }
+
+    /**
+     * То же, но часть участников играет вне конкурса.
+     *
+     * Место и баллы у них считаются как у всех — они в таблице и в зачёте сезона. А вот
+     * победителя и проигравшего ищем только среди тех, кто играет на шаурму: иначе гость,
+     * занявший первое место, забирал бы чужую шаурму, а последнее — платил бы за тур, в
+     * котором не участвовал.
+     */
+    public static List<Row> rank(List<Row> rows, List<Tiebreaker> tiebreakers,
+                                 Set<Long> outOfCompetition) {
         Comparator<Row> cmp = comparator(tiebreakers);
         List<Row> sorted = new ArrayList<>(rows);
         sorted.sort(cmp.thenComparingLong(Row::userId));
@@ -118,15 +140,28 @@ public final class StandingsCalculator {
             boolean sameAsPrevious = i > 0 && cmp.compare(sorted.get(i - 1), sorted.get(i)) == 0;
             places[i] = sameAsPrevious ? places[i - 1] : i + 1;
         }
-        int worstPlace = sorted.isEmpty() ? 0 : places[places.length - 1];
-        boolean decided = worstPlace > 1;
+
+        // лучшее и худшее место среди тех, кто играет на шаурму
+        int best = Integer.MAX_VALUE;
+        int worst = 0;
+        for (int i = 0; i < sorted.size(); i++) {
+            if (outOfCompetition.contains(sorted.get(i).userId())) {
+                continue;
+            }
+            best = Math.min(best, places[i]);
+            worst = Math.max(worst, places[i]);
+        }
+        // все поделили одно место — ни победителей, ни проигравших
+        boolean decided = worst > best;
 
         List<Row> result = new ArrayList<>();
         for (int i = 0; i < sorted.size(); i++) {
             Row r = sorted.get(i);
+            boolean playing = !outOfCompetition.contains(r.userId());
             result.add(new Row(r.userId(), r.points(), r.exactScores(), r.outcomeHits(), r.goalDiffHits(),
                     r.goalError(), r.submittedAt(), places[i],
-                    decided && places[i] == 1, decided && places[i] == worstPlace));
+                    playing && decided && places[i] == best,
+                    playing && decided && places[i] == worst));
         }
         return result;
     }

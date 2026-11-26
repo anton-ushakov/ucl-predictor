@@ -30,10 +30,13 @@ public class RoundController {
     private final SeasonService seasons;
     private final SeasonReportService reports;
     private final RoundRecountService recounts;
+    private final ExhibitionService exhibitions;
 
     public RoundController(AuthService auth, RoundService rounds, HistoryService history,
                            ScoreDecisionService decisions, SeasonService seasons,
-                           SeasonReportService reports, RoundRecountService recounts) {
+                           SeasonReportService reports, RoundRecountService recounts,
+                           ExhibitionService exhibitions) {
+        this.exhibitions = exhibitions;
         this.recounts = recounts;
         this.reports = reports;
         this.seasons = seasons;
@@ -61,6 +64,23 @@ public class RoundController {
     }
 
     public record RecountResult(String message) {
+    }
+
+    public record ExhibitionRequest(@jakarta.validation.constraints.NotNull Boolean out) {
+    }
+
+    /**
+     * Играть этот тур вне конкурса: баллы идут в зачёт сезона, а шаурму участник не покупает
+     * и не получает. Решает каждый за себя и только пока итоги не подведены.
+     */
+    @PutMapping("/rounds/{week}/exhibition")
+    public ExhibitionService.Answer exhibition(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("week") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate week,
+            @Valid @RequestBody ExhibitionRequest request) {
+        AppUser user = auth.authenticate(authorization);
+        return exhibitions.set(user, groupId, week, Boolean.TRUE.equals(request.out()));
     }
 
     /**

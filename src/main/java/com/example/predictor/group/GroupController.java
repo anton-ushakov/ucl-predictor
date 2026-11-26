@@ -44,7 +44,9 @@ public class GroupController {
             @Min(0) @Max(100) Integer outcomePoints,
             Boolean useRussianNames,
             Boolean jokerEnabled,
-            MatchSelection matchSelection) {
+            MatchSelection matchSelection,
+            /** Подборка «Топ-матчи»: null у старых версий приложения — значит, не меняем. */
+            Boolean topMatches) {
     }
 
     public record HelperRequest(@NotNull Boolean helper) {
@@ -123,7 +125,11 @@ public class GroupController {
         return groups.updateSettings(user, groupId, request.lockMinutesBefore(),
                 request.tiebreakers(), request.revealMode(), scoreBasis, submissionMode, scoring,
                 useRussianNames, Boolean.TRUE.equals(request.jokerEnabled()),
-                request.matchSelection() == null ? MatchSelection.OWNER : request.matchSelection());
+                request.matchSelection() == null ? MatchSelection.OWNER : request.matchSelection(),
+                // старое приложение этого поля не знает: оставляем как было
+                request.topMatches() == null
+                        ? groups.detail(user, groupId).settings().topMatches()
+                        : request.topMatches());
     }
 
     /** Отметить участника помощником: он сможет собирать состав тура. Только владелец. */

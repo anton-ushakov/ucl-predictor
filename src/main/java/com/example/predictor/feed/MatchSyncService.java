@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,8 +36,12 @@ public class MatchSyncService {
 
     private static final Logger log = LoggerFactory.getLogger(MatchSyncService.class);
 
-    /** Сколько недель назад ещё обновляем матчи (счёт мог появиться позже). */
-    private static final int WEEKS_BACK = 3;
+    /**
+     * Сколько недель назад ещё обновляем матчи. Счёт правят и спустя время: отменённый гол,
+     * техническое поражение по жалобе соперника. Запрос к источнику один на турнир при любом
+     * окне, поэтому широкое окно почти ничего не стоит — тяжелее только ответ.
+     */
+    private static final int WEEKS_BACK = 10;
 
     /**
      * changed — матчи, у которых источник поправил уже записанный счёт. По таким турам
@@ -133,6 +138,35 @@ public class MatchSyncService {
             }
         }
         return total;
+    }
+
+    /**
+     * Переспрашивает источник о турнирах этих матчей за дни, когда они игрались.
+     *
+     * Нужно для матча, который сыграли давно: обычное обновление так далеко назад не
+     * заглядывает, а счёт мог поменяться — по жалобе команды или решению дисциплинарного
+     * комитета. Запросов уходит по одному на турнир, поэтому звать можно спокойно.
+     */
+    public Result refreshAround(Collection<FootballMatch> list) {
+        if (list == null || list.isEmpty() || !client.isConfigured()) {
+            return NOTHING;
+        }
+        Map<Long, Competition> byId = new LinkedHashMap<>();
+        LocalDate from = null;
+        LocalDate to = null;
+        for (FootballMatch m : list) {
+            if (m.getCompetition() == null || m.getKickoffAt() == null) {
+                continue;
+            }
+            byId.putIfAbsent(m.getCompetition().getId(), m.getCompetition());
+            LocalDate day = LocalDate.ofInstant(m.getKickoffAt(), time.zone());
+            from = from == null || day.isBefore(from) ? day : from;
+            to = to == null || day.isAfter(to) ? day : to;
+        }
+        if (byId.isEmpty()) {
+            return NOTHING;
+        }
+        return syncAll(byId.values(), from.minusDays(1), to.plusDays(1));
     }
 
     private Result syncCompetition(Competition competition, LocalDate from, LocalDate to) {

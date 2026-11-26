@@ -45,10 +45,16 @@ public class RoundRecountService {
     private final RecountAlerts alerts;
     private final GroupAccess access;
     private final AdminAccess admins;
+    private final com.example.predictor.feed.MatchSyncService sync;
+    private final RoundMatches roundMatches;
 
     public RoundRecountService(RoundMatchRepository selection, RoundResultRepository results,
                                FriendGroupRepository groups, RoundFinalizer finalizer,
-                               RecountAlerts alerts, GroupAccess access, AdminAccess admins) {
+                               RecountAlerts alerts, GroupAccess access, AdminAccess admins,
+                               com.example.predictor.feed.MatchSyncService sync,
+                               RoundMatches roundMatches) {
+        this.sync = sync;
+        this.roundMatches = roundMatches;
         this.selection = selection;
         this.results = results;
         this.groups = groups;
@@ -87,7 +93,14 @@ public class RoundRecountService {
         return done;
     }
 
-    /** Пересчёт по кнопке: владелец группы или владелец приложения. */
+    /**
+     * Пересчёт по кнопке: владелец группы или владелец приложения.
+     *
+     * Сначала переспрашиваем источник о матчах этого тура. Счёт правят и спустя дни — по
+     * жалобе команды, решением дисциплинарного комитета, — а обычное обновление так далеко
+     * назад не заглядывает. Поэтому кнопка сначала узнаёт счёт заново и только потом
+     * считает: иначе она пересчитывала бы по тем же данным и ничего бы не меняла.
+     */
     public String recountByHand(AppUser user, Long groupId, LocalDate roundKey) {
         Membership ms = access.require(user, groupId);
         if (!ms.isOwner() && !admins.isAdmin(user)) {
@@ -98,11 +111,25 @@ public class RoundRecountService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Итоги этого тура ещё не подведены — пересчитывать нечего");
         }
+        boolean scoreChanged = false;
+        try {
+            scoreChanged = !sync.refreshAround(roundMatches.forRound(groupId, roundKey))
+                    .changed().isEmpty();
+        } catch (RuntimeException e) {
+            // источник не ответил — считаем по тому, что лежит у нас
+            log.warn("Не удалось переспросить источник перед пересчётом тура {} группы {}: {}",
+                    roundKey, groupId, e.getMessage());
+        }
         boolean done = recount(new Round(groupId, roundKey),
-                "Итоги пересчитали по текущему счёту матчей.");
-        return done
-                ? "Итоги пересчитаны по текущему счёту. Участникам отправлено оповещение"
-                : "Пересчитать не удалось: по какому-то матчу тура счёт ещё не окончательный";
+                scoreChanged
+                        ? "Источник уточнил счёт матча."
+                        : "Итоги пересчитали по текущему счёту матчей.");
+        if (!done) {
+            return "Пересчитать не удалось: по какому-то матчу тура счёт ещё не окончательный";
+        }
+        return scoreChanged
+                ? "Источник уточнил счёт: итоги пересчитаны, участникам отправлено оповещение"
+                : "Итоги пересчитаны по текущему счёту. Участникам отправлено оповещение";
     }
 
     private boolean recount(Round round, String reason) {

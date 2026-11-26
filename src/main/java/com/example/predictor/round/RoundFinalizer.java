@@ -14,6 +14,8 @@ import com.example.predictor.repository.GroupMemberRepository;
 import com.example.predictor.repository.GroupRoundKey;
 import com.example.predictor.repository.PredictionRepository;
 import com.example.predictor.repository.RoundResultRepository;
+import com.example.predictor.repository.ShawarmaDebtRepository;
+import org.springframework.beans.factory.annotation.Value;
 import com.example.predictor.standings.StandingsCalculator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -31,8 +34,13 @@ import java.util.Set;
 
 /**
  * Подводит итоги туров. Тур группы считается завершённым, когда все его матчи сыграны или отменены.
- * Итоги записываются один раз и больше не меняются: если позже поменять настройки группы или
- * football-data.org поправит счёт, история прошлых туров останется прежней.
+ *
+ * Итоги считаются по правилам, замороженным на начало тура: поменять настройки группы задним
+ * числом и переписать этим прошлые туры нельзя. А вот счёт — другое дело. Источник иногда
+ * отдаёт матч сыгранным раньше, чем окончательный счёт, и правит его потом: отменённый гол,
+ * уточнённый автогол. Поэтому, во-первых, итоги подводятся не сразу после финального свистка,
+ * а когда счёт успел устояться; во-вторых, если счёт всё же поправили, итоги пересчитываются —
+ * сами или по кнопке владельца.
  */
 @Service
 public class RoundFinalizer {
@@ -51,6 +59,7 @@ public class RoundFinalizer {
     private final DebtService debtService;
     private final com.example.predictor.repository.GroupRoundRepository groupRounds;
     private final JokerService jokerService;
+    private final ShawarmaDebtRepository debts;
 
     public RoundFinalizer(PredictionRepository predictions, RoundMatches roundMatches,
                           RoundResultRepository results, FriendGroupRepository groups,
@@ -58,7 +67,11 @@ public class RoundFinalizer {
                           PlatformTransactionManager transactionManager,
                           ScoreDecisionService decisionService, DebtService debtService,
                           JokerService jokerService,
-                          com.example.predictor.repository.GroupRoundRepository groupRounds) {
+                          com.example.predictor.repository.GroupRoundRepository groupRounds,
+                          ShawarmaDebtRepository debts,
+                          @Value("${app.rounds.settle-delay:PT2H30M}") Duration settleDelay) {
+        this.debts = debts;
+        this.settleDelay = settleDelay;
         this.groupRounds = groupRounds;
         this.jokerService = jokerService;
         this.debtService = debtService;
@@ -72,6 +85,13 @@ public class RoundFinalizer {
         this.tx = new TransactionTemplate(transactionManager);
         this.decisionService = decisionService;
     }
+
+    /**
+     * Сколько ждать после начала матча, прежде чем считать его счёт окончательным.
+     * Обычный матч идёт около двух часов с перерывом, запас — на добавленное время и на то,
+     * чтобы источник успел свести протокол.
+     */
+    private final Duration settleDelay;
 
     /** Подводит итоги всех туров, которые уже можно подвести. Возвращает число подведённых туров. */
     public int finalizeReadyRounds() {
@@ -99,6 +119,37 @@ public class RoundFinalizer {
         return done;
     }
 
+    /**
+     * Пересчитывает итоги уже подведённого тура по текущему счёту.
+     *
+     * Правила тура остаются прежними — они заморожены, и менять их задним числом нельзя.
+     * Меняется только счёт: источник поправил протокол, владелец уточнил добавочное время.
+     * Отданные долги не трогаем: шаурма, которую уже съели, не отменяется. А вот неотданные
+     * заводятся заново по новым итогам.
+     *
+     * @return true, если итоги пересчитаны. false — если по туру сейчас вообще нельзя
+     *         подвести итоги; тогда прежние итоги остаются на месте.
+     */
+    public boolean recount(Long groupId, LocalDate roundKey) {
+        Boolean done = tx.execute(status -> {
+            results.deleteByGroupIdAndRoundWeek(groupId, roundKey);
+            results.flush();
+            for (var debt : debts.findByGroupIdAndRoundWeekAndSettledAtIsNull(groupId, roundKey)) {
+                debts.delete(debt);
+            }
+            if (!finalizeRound(groupId, roundKey)) {
+                // считать нечего — возвращаем всё как было
+                status.setRollbackOnly();
+                return false;
+            }
+            return true;
+        });
+        if (Boolean.TRUE.equals(done)) {
+            log.info("Итоги тура {} группы {} пересчитаны", roundKey, groupId);
+        }
+        return Boolean.TRUE.equals(done);
+    }
+
     private boolean finalizeRound(Long groupId, LocalDate week) {
         FriendGroup group = groups.findById(groupId).orElse(null);
         if (group == null) {
@@ -121,6 +172,7 @@ public class RoundFinalizer {
         // о добавочном времени или пенальти, то владелец и участники уже приняли решение.
         Map<Long, ScoreDecisionService.Info> infos =
                 decisionService.resolve(groupId, rules, weekMatches, memberList, predictors);
+        Instant now = Instant.now();
         List<StandingsCalculator.FinishedMatch> finished = new ArrayList<>();
         for (FootballMatch m : weekMatches) {
             ScoreDecisionService.Info info = infos.get(m.getId());
@@ -128,6 +180,11 @@ public class RoundFinalizer {
                 return false;
             }
             if (info.kind().counted()) {
+                // Счёт должен устояться: источник бывает отдаёт матч сыгранным, пока протокол
+                // ещё правят, и подведённые по такому счёту итоги оказываются чужими.
+                if (m.getKickoffAt() != null && now.isBefore(m.getKickoffAt().plus(settleDelay))) {
+                    return false;
+                }
                 finished.add(new StandingsCalculator.FinishedMatch(m.getId(),
                         m.scoreHome(info.basis()), m.scoreAway(info.basis())));
             }
@@ -152,7 +209,6 @@ public class RoundFinalizer {
                 jokerService.forRound(groupId, week));
 
         String tiebreakersCsv = Tiebreaker.toCsv(rules.tiebreakers());
-        Instant now = Instant.now();
         List<RoundResult> toSave = new ArrayList<>();
         for (StandingsCalculator.Row r : rows) {
             toSave.add(new RoundResult(groupId, week, r.userId(), r.points(), r.exactScores(),

@@ -38,13 +38,23 @@ public class MatchSyncService {
     /** Сколько недель назад ещё обновляем матчи (счёт мог появиться позже). */
     private static final int WEEKS_BACK = 3;
 
-    public record Result(int competitions, int fetched, int created, int updated, int skipped) {
+    /**
+     * changed — матчи, у которых источник поправил уже записанный счёт. По таким турам
+     * итоги нужно пересчитать.
+     */
+    public record Result(int competitions, int fetched, int created, int updated, int skipped,
+                         List<Long> changed) {
 
-        Result plus(int fetched, int created, int updated, int skipped) {
-            return new Result(this.competitions + 1, this.fetched + fetched, this.created + created,
-                    this.updated + updated, this.skipped + skipped);
+        Result plus(Result one) {
+            List<Long> all = new ArrayList<>(this.changed);
+            all.addAll(one.changed());
+            return new Result(this.competitions + 1, this.fetched + one.fetched(),
+                    this.created + one.created(), this.updated + one.updated(),
+                    this.skipped + one.skipped(), all);
         }
     }
+
+    private static final Result NOTHING = new Result(0, 0, 0, 0, 0, List.of());
 
     private final FootballDataClient client;
     private final MatchRepository matches;
@@ -80,7 +90,7 @@ public class MatchSyncService {
         List<Long> playing = matches.findCompetitionsPlaying(
                 now.minus(Duration.ofHours(5)), now);
         if (playing.isEmpty()) {
-            return new Result(0, 0, 0, 0, 0);
+            return NOTHING;
         }
         LocalDate today = LocalDate.now(time.zone());
         return syncAll(competitions.findAllById(playing), today.minusDays(1), today.plusDays(1));
@@ -96,7 +106,7 @@ public class MatchSyncService {
     }
 
     private Result syncAll(Iterable<Competition> list, LocalDate from, LocalDate to) {
-        Result total = new Result(0, 0, 0, 0, 0);
+        Result total = NOTHING;
         boolean first = true;
         for (Competition competition : list) {
             String code = competition.getCode();
@@ -109,7 +119,7 @@ public class MatchSyncService {
             first = false;
             try {
                 Result one = syncCompetition(competition, from, to);
-                total = total.plus(one.fetched(), one.created(), one.updated(), one.skipped());
+                total = total.plus(one);
                 log.debug("{}: получено {}, создано {}, обновлено {}, пропущено {}",
                         code, one.fetched(), one.created(), one.updated(), one.skipped());
             } catch (FootballDataClient.ForbiddenException e) {
@@ -135,14 +145,16 @@ public class MatchSyncService {
             FeedMapper.map(m, time.zone()).ifPresent(x -> mapped.put(x.externalId(), x));
         }
         if (mapped.isEmpty()) {
-            return new Result(1, feed.size(), 0, 0, 0);
+            return new Result(1, feed.size(), 0, 0, 0, List.of());
         }
 
         LocalDate windowFrom = time.currentWeek().minusWeeks(WEEKS_BACK);
         LocalDate windowTo = time.lastPredictableWeek();
         Long competitionId = competition.getId();
 
+        List<Long> changed = new ArrayList<>();
         int[] counts = tx.execute(status -> {
+            changed.clear();
             Map<Long, FootballMatch> existing = new HashMap<>();
             for (FootballMatch m : matches.findBySourceAndExternalIdIn(MatchSource.FOOTBALL_DATA,
                     new ArrayList<>(mapped.keySet()))) {
@@ -170,18 +182,25 @@ public class MatchSyncService {
                     updated++;
                 }
                 FeedMapper.Parts s = m.score();
-                match.applyFeed(m.homeTeam(), m.awayTeam(), m.homeCrest(), m.awayCrest(),
+                boolean scoreFixed = match.applyFeed(
+                        m.homeTeam(), m.awayTeam(), m.homeCrest(), m.awayCrest(),
                         m.kickoffAt(), m.roundWeek(), m.stage(), m.matchday(), m.status(),
                         s == null ? null : s.homeScore(), s == null ? null : s.awayScore(),
                         s == null ? null : s.extraHome(), s == null ? null : s.extraAway(),
                         s == null ? null : s.penHome(), s == null ? null : s.penAway(),
                         s == null ? null : s.duration());
                 matches.save(match);
+                if (scoreFixed) {
+                    matches.flush();
+                    changed.add(match.getId());
+                    log.info("{}: источник поправил счёт матча {} — {}:{}", competition.getCode(),
+                            match.getId(), match.getHomeScore(), match.getAwayScore());
+                }
             }
             return new int[]{created, updated, skipped};
         });
         int[] c = counts == null ? new int[]{0, 0, 0} : counts;
-        return new Result(1, feed.size(), c[0], c[1], c[2]);
+        return new Result(1, feed.size(), c[0], c[1], c[2], changed);
     }
 
     private void sleep() {

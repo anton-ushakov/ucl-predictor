@@ -462,7 +462,9 @@ public class RoundService {
                         .map(com.example.predictor.domain.GroupRound::getTitle).orElse(null),
                 weekMatches.get(0).getKickoffAt(),
                 weekMatches.get(weekMatches.size() - 1).getKickoffAt(),
-                friendly, tiebreakNote);
+                friendly, tiebreakNote,
+                // пересчёт нужен, только когда итоги уже подведены, и только владельцу
+                finalized && ms.isOwner());
     }
 
     private List<StandingRow> provisional(List<FootballMatch> weekMatches, List<GroupMember> memberList,

@@ -16,6 +16,9 @@ public interface ShawarmaDebtRepository extends JpaRepository<ShawarmaDebt, Long
     /** Неотданные долги перед участником. */
     List<ShawarmaDebt> findByCreditorIdAndSettledAtIsNull(Long creditorId);
 
+    /** Долги тура, которые ещё не отдали: при пересчёте итогов они заводятся заново. */
+    List<ShawarmaDebt> findByGroupIdAndRoundWeekAndSettledAtIsNull(Long groupId, LocalDate roundWeek);
+
     boolean existsByGroupIdAndRoundWeekAndDebtorIdAndCreditorId(
             Long groupId, LocalDate roundWeek, Long debtorId, Long creditorId);
 }

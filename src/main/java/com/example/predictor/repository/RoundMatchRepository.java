@@ -13,6 +13,9 @@ public interface RoundMatchRepository extends JpaRepository<RoundMatch, Long> {
 
     List<RoundMatch> findByGroupIdAndRoundWeekBetween(Long groupId, LocalDate from, LocalDate to);
 
+    /** В какие туры каких групп входят эти матчи: по ним пересчитываются итоги. */
+    List<RoundMatch> findByMatchIdIn(java.util.Collection<Long> matchIds);
+
     Optional<RoundMatch> findByGroupIdAndMatchId(Long groupId, Long matchId);
 
     /** Недели, в которых у группы отобран хотя бы один матч. */

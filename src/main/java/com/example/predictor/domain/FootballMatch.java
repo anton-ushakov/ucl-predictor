@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Objects;
 
 @Entity
 @Table(name = "matches")
@@ -204,13 +205,24 @@ public class FootballMatch {
     /**
      * Обновляет матч данными из football-data.org.
      * Счёт сохраняется только для сыгранного матча, иначе очищается.
+     *
+     * @return true, если у уже сыгранного матча поменялся счёт. Источник иногда правит его
+     *         задним числом — например, отменяет гол или уточняет автогол, — и тогда итоги
+     *         туров с этим матчем надо пересчитать: иначе в таблице останутся чужие баллы.
      */
-    public void applyFeed(String homeTeam, String awayTeam, String homeCrest, String awayCrest,
-                          Instant kickoffAt, LocalDate roundWeek,
-                          String stage, Integer matchday, MatchStatus status,
-                          Integer homeScore, Integer awayScore,
-                          Integer extraHome, Integer extraAway, Integer penHome, Integer penAway,
-                          String duration) {
+    public boolean applyFeed(String homeTeam, String awayTeam, String homeCrest, String awayCrest,
+                             Instant kickoffAt, LocalDate roundWeek,
+                             String stage, Integer matchday, MatchStatus status,
+                             Integer homeScore, Integer awayScore,
+                             Integer extraHome, Integer extraAway, Integer penHome, Integer penAway,
+                             String duration) {
+        boolean wasFinished = this.status == MatchStatus.FINISHED;
+        Integer oldHome = this.homeScore;
+        Integer oldAway = this.awayScore;
+        Integer oldExtraHome = this.extraHome;
+        Integer oldExtraAway = this.extraAway;
+        Integer oldPenHome = this.penHome;
+        Integer oldPenAway = this.penAway;
         this.homeTeam = homeTeam;
         this.awayTeam = awayTeam;
         // источник иногда отдаёт матч без эмблемы: прежнюю в этом случае не теряем
@@ -250,6 +262,12 @@ public class FootballMatch {
             this.liveHome = playing ? homeScore : null;
             this.liveAway = playing ? awayScore : null;
         }
+        return wasFinished && !(Objects.equals(oldHome, this.homeScore)
+                && Objects.equals(oldAway, this.awayScore)
+                && Objects.equals(oldExtraHome, this.extraHome)
+                && Objects.equals(oldExtraAway, this.extraAway)
+                && Objects.equals(oldPenHome, this.penHome)
+                && Objects.equals(oldPenAway, this.penAway));
     }
 
     /** Текущий счёт идущего матча: только для показа, баллы по нему не считаются. */

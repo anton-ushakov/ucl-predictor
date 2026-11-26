@@ -29,10 +29,12 @@ public class RoundController {
     private final ScoreDecisionService decisions;
     private final SeasonService seasons;
     private final SeasonReportService reports;
+    private final RoundRecountService recounts;
 
     public RoundController(AuthService auth, RoundService rounds, HistoryService history,
                            ScoreDecisionService decisions, SeasonService seasons,
-                           SeasonReportService reports) {
+                           SeasonReportService reports, RoundRecountService recounts) {
+        this.recounts = recounts;
         this.reports = reports;
         this.seasons = seasons;
         this.decisions = decisions;
@@ -56,6 +58,22 @@ public class RoundController {
                            @PathVariable("week") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate week) {
         AppUser user = auth.authenticate(authorization);
         return rounds.view(user, groupId, week);
+    }
+
+    public record RecountResult(String message) {
+    }
+
+    /**
+     * Пересчитать итоги тура по текущему счёту матчей. Нужно, когда источник поправил счёт
+     * задним числом: правила тура остаются прежними, меняются только баллы.
+     */
+    @PostMapping("/rounds/{week}/recount")
+    public RecountResult recount(
+            @RequestHeader(value = "Authorization", required = false) String authorization,
+            @PathVariable("groupId") Long groupId,
+            @PathVariable("week") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate week) {
+        AppUser user = auth.authenticate(authorization);
+        return new RecountResult(recounts.recountByHand(user, groupId, week));
     }
 
     /** Сохранить прогнозы на все открытые матчи тура. Изменить их после этого нельзя. */

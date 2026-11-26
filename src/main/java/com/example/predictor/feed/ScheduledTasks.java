@@ -26,12 +26,15 @@ public class ScheduledTasks {
 
     private final com.example.predictor.round.AutoSelectionService autoSelection;
     private final ApiFootballSyncService apiFootball;
+    private final com.example.predictor.round.RoundRecountService recount;
 
     public ScheduledTasks(FootballDataClient client, MatchSyncService sync, RoundFinalizer finalizer,
                           NotificationGenerator notifications,
                           com.example.predictor.round.AutoSelectionService autoSelection,
                           ApiFootballSyncService apiFootball,
-                          ExtraDataSyncService extra) {
+                          ExtraDataSyncService extra,
+                          com.example.predictor.round.RoundRecountService recount) {
+        this.recount = recount;
         this.extra = extra;
         this.apiFootball = apiFootball;
         this.autoSelection = autoSelection;
@@ -83,6 +86,7 @@ public class ScheduledTasks {
             }
             log.info("Идущие матчи обновлены: турниров {}, получено {}, обновлено {}",
                     r.competitions(), r.fetched(), r.updated());
+            recountChanged(r);
         } catch (RuntimeException e) {
             log.warn("Не удалось обновить счёт идущих матчей: {}", e.getMessage());
             return;
@@ -106,6 +110,7 @@ public class ScheduledTasks {
                 MatchSyncService.Result r = sync.sync();
                 log.info("Матчи обновлены: турниров {}, получено {}, создано {}, обновлено {}, пропущено {}",
                         r.competitions(), r.fetched(), r.created(), r.updated(), r.skipped());
+                recountChanged(r);
             } catch (RuntimeException e) {
                 log.warn("Не удалось обновить матчи из football-data.org: {}", e.getMessage());
             }
@@ -142,6 +147,25 @@ public class ScheduledTasks {
             notifications.generate();
         } catch (RuntimeException e) {
             log.error("Ошибка при подготовке оповещений", e);
+        }
+    }
+
+    /**
+     * Источник поправил счёт уже сыгранного матча — значит, подведённые по нему итоги надо
+     * пересчитать. Иначе в таблице тура навсегда останутся чужие баллы.
+     */
+    private void recountChanged(MatchSyncService.Result r) {
+        if (r.changed().isEmpty()) {
+            return;
+        }
+        try {
+            int rounds = recount.recountRoundsOf(r.changed());
+            if (rounds > 0) {
+                log.info("Счёт поправлен у матчей {} — пересчитаны итоги туров: {}",
+                        r.changed(), rounds);
+            }
+        } catch (RuntimeException e) {
+            log.error("Ошибка пересчёта итогов после правки счёта", e);
         }
     }
 

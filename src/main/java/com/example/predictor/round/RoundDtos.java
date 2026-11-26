@@ -115,7 +115,9 @@ public final class RoundDtos {
                             int pendingDecisions, int decisionsForMe, String note,
                             boolean jokerEnabled, Long jokerMatchId, int liveMatches,
                             int roundNo, String title, Instant firstKickoff, Instant lastKickoff,
-                            boolean friendly, String tiebreakNote) {
+                            boolean friendly, String tiebreakNote,
+                            /** Владельцу тура показывается пересчёт итогов по текущему счёту. */
+                            boolean canRecount) {
     }
 
     /**

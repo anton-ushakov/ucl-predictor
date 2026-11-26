@@ -16,6 +16,9 @@ public interface RoundResultRepository extends JpaRepository<RoundResult, Long> 
 
     List<RoundResult> findByGroupIdOrderByRoundWeekDescPlaceAscUserIdAsc(Long groupId);
 
+    /** Стереть итоги тура: нужно, когда их пересчитывают по уточнённому счёту. */
+    void deleteByGroupIdAndRoundWeek(Long groupId, LocalDate roundWeek);
+
     /** Туры группы, итоги которых уже зафиксированы. */
     @Query("select distinct r.roundWeek from RoundResult r where r.groupId = :groupId")
     List<LocalDate> findFinalizedWeeks(@Param("groupId") Long groupId);

@@ -190,6 +190,7 @@ public class MatchSyncService {
                         s == null ? null : s.penHome(), s == null ? null : s.penAway(),
                         s == null ? null : s.duration());
                 match.applyTeamIds(m.homeTeamId(), m.awayTeamId());
+                match.noteSettled(Instant.now(), scoreFixed);
                 matches.save(match);
                 if (scoreFixed) {
                     matches.flush();

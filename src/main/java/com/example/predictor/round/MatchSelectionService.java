@@ -459,6 +459,8 @@ public class MatchSelectionService {
                 request.penHome(), request.penAway()));
         match.setManualScore(request.homeScore(), request.awayScore(), request.extraHome(),
                 request.extraAway(), request.penHome(), request.penAway());
+        // счёт ввёл человек: ждать, пока он «устоится», не нужно
+        match.noteSettled(now, true);
         matches.save(match);
         return new ManualMatchResult(matchId, match.getRoundWeek(),
                 "Счёт сохранён: " + match.getHomeScore() + ":" + match.getAwayScore());

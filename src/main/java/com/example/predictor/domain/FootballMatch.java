@@ -55,6 +55,14 @@ public class FootballMatch {
     @Column(name = "away_team_id")
     private Long awayTeamId;
 
+    /**
+     * Когда счёт стал окончательным. От него отсчитывается пауза перед подведением итогов:
+     * источник правит счёт и после финального свистка, а ждать «столько-то часов от начала»
+     * нельзя — матч с добавочным временем и пенальти идёт дольше трёх часов.
+     */
+    @Column(name = "settled_at")
+    private Instant settledAt;
+
     @Column(name = "kickoff_at", nullable = false)
     private Instant kickoffAt;
 
@@ -317,6 +325,26 @@ public class FootballMatch {
     }
 
     /** Голы хозяев по выбранному в группе счёту (null, пока матч не сыгран). */
+    public Instant getSettledAt() {
+        return settledAt;
+    }
+
+    /**
+     * Отмечает, что счёт этого матча больше не меняется. Любая правка счёта запускает
+     * паузу заново: уточнённый счёт — такой же повод подождать, как и первый.
+     *
+     * @param scoreChanged источник поправил уже записанный счёт
+     */
+    public void noteSettled(Instant now, boolean scoreChanged) {
+        if (status != MatchStatus.FINISHED || homeScore == null) {
+            settledAt = null;
+            return;
+        }
+        if (settledAt == null || scoreChanged) {
+            settledAt = now;
+        }
+    }
+
     public Long getHomeTeamId() {
         return homeTeamId;
     }

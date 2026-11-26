@@ -70,7 +70,7 @@ public class RoundFinalizer {
                           JokerService jokerService,
                           com.example.predictor.repository.GroupRoundRepository groupRounds,
                           ShawarmaDebtRepository debts, ExhibitionService exhibition,
-                          @Value("${app.rounds.settle-delay:PT2H30M}") Duration settleDelay) {
+                          @Value("${app.rounds.settle-delay:PT20M}") Duration settleDelay) {
         this.exhibition = exhibition;
         this.debts = debts;
         this.settleDelay = settleDelay;
@@ -89,11 +89,17 @@ public class RoundFinalizer {
     }
 
     /**
-     * Сколько ждать после начала матча, прежде чем считать его счёт окончательным.
-     * Обычный матч идёт около двух часов с перерывом, запас — на добавленное время и на то,
-     * чтобы источник успел свести протокол.
+     * Сколько ждать после того, как счёт перестал меняться. Пауза короткая: она нужна лишь
+     * на случай, когда источник объявил матч сыгранным, а протокол ещё правит.
      */
     private final Duration settleDelay;
+
+    /**
+     * Запасная пауза — от начала матча, если момент окончательного счёта неизвестен (матч
+     * сыгран давно, ещё до появления этой отметки). Берём с запасом на добавочное время и
+     * серию пенальти: с ними матч идёт дольше трёх часов.
+     */
+    private static final Duration LONG_WAIT = Duration.ofMinutes(230);
 
     /** Подводит итоги всех туров, которые уже можно подвести. Возвращает число подведённых туров. */
     public int finalizeReadyRounds() {
@@ -152,6 +158,20 @@ public class RoundFinalizer {
         return Boolean.TRUE.equals(done);
     }
 
+    /**
+     * С какого момента счёт матча можно считать окончательным.
+     *
+     * Отсчитываем от времени, когда счёт перестал меняться, а не от начала матча: матч с
+     * добавочным временем и серией пенальти идёт дольше трёх часов, и фиксированная пауза
+     * от начала закрыла бы тур по счёту основного времени.
+     */
+    private Instant readyAt(FootballMatch m) {
+        if (m.getSettledAt() != null) {
+            return m.getSettledAt().plus(settleDelay);
+        }
+        return m.getKickoffAt() == null ? Instant.EPOCH : m.getKickoffAt().plus(LONG_WAIT);
+    }
+
     private boolean finalizeRound(Long groupId, LocalDate week) {
         FriendGroup group = groups.findById(groupId).orElse(null);
         if (group == null) {
@@ -184,7 +204,7 @@ public class RoundFinalizer {
             if (info.kind().counted()) {
                 // Счёт должен устояться: источник бывает отдаёт матч сыгранным, пока протокол
                 // ещё правят, и подведённые по такому счёту итоги оказываются чужими.
-                if (m.getKickoffAt() != null && now.isBefore(m.getKickoffAt().plus(settleDelay))) {
+                if (now.isBefore(readyAt(m))) {
                     return false;
                 }
                 finished.add(new StandingsCalculator.FinishedMatch(m.getId(),

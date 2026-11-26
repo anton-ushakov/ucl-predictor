@@ -228,12 +228,14 @@ public class ApiFootballSyncService {
                 updated++;
             }
             FeedMapper.Parts s = m.score();
-            match.applyFeed(m.homeTeam(), m.awayTeam(), m.homeCrest(), m.awayCrest(),
+            boolean scoreFixed = match.applyFeed(
+                    m.homeTeam(), m.awayTeam(), m.homeCrest(), m.awayCrest(),
                     m.kickoffAt(), m.roundWeek(), m.stage(), m.matchday(), m.status(),
                     s == null ? null : s.homeScore(), s == null ? null : s.awayScore(),
                     s == null ? null : s.extraHome(), s == null ? null : s.extraAway(),
                     s == null ? null : s.penHome(), s == null ? null : s.penAway(),
                     s == null ? null : s.duration());
+            match.noteSettled(java.time.Instant.now(), scoreFixed);
             matches.save(match);
         }
         return new int[]{created, updated, skipped};
